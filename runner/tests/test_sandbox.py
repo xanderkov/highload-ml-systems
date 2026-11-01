@@ -108,3 +108,32 @@ def test_background_grandchild_killed_after_normal_exit(tmp_path):
     assert result.timed_out is False
     assert result.returncode == 0
     assert _gone(int(result.stdout.split()[0]))
+
+
+ESCAPER = (
+    "import os, sys, time\n"
+    "pid = os.fork()\n"
+    "if pid == 0:\n"
+    "    os.setsid()\n"  # своя сессия: killpg группы задания его не достанет
+    "    time.sleep(60)\n"
+    "    os._exit(0)\n"
+    "print(pid, flush=True)\n"
+)
+
+
+def test_escaped_child_holding_pipe_does_not_hang(tmp_path):
+    import os
+    import signal
+    import time
+
+    started = time.monotonic()
+    result = run([sys.executable, "-c", ESCAPER], tmp_path, timeout_s=1, memory_mb=512)
+    elapsed = time.monotonic() - started
+    try:
+        os.kill(int(result.stdout.split()[0]), signal.SIGKILL)
+    except (ProcessLookupError, ValueError, IndexError):
+        pass
+
+    assert elapsed < 20
+    assert result.timed_out is False
+    assert result.stdout.split()

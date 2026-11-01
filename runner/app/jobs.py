@@ -258,6 +258,10 @@ def _check_metrics(metrics) -> str | None:
         if not isinstance(named, dict):
             return f"metrics[{unit!r}] должен быть объектом имя -> число"
         for name, value in named.items():
+            if name == "speedup":
+                # Имя занято измеренным ускорением: метрика харнесса с тем же
+                # именем подменила бы его в вердикте.
+                return f"metrics[{unit!r}]: имя 'speedup' зарезервировано за измеренным ускорением"
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
                 return f"metrics[{unit!r}][{name!r}] должно быть конечным числом"
     return None

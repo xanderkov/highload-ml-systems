@@ -13,6 +13,8 @@ from pathlib import Path
 # 16 потоков на 16-ядерной машине падала на создании потоков.
 MAX_PROCESSES = 256
 MAX_FILE_MB = 64
+# Сколько дочитывать pipe после убийства группы, прежде чем бросить его.
+DRAIN_TIMEOUT_S = 5
 
 
 @dataclass
@@ -62,7 +64,17 @@ def run(
         # держащего pipe, это не таймаут задания: просто добираем вывод.
         timed_out = proc.poll() is None
         _kill_group(proc.pid)
-        stdout, stderr = proc.communicate()
+        try:
+            stdout, stderr = proc.communicate(timeout=DRAIN_TIMEOUT_S)
+        except subprocess.TimeoutExpired as exc:
+            # Pipe держит процесс, ушедший из группы (setsid): killpg его не
+            # достаёт, и communicate() без таймаута ждал бы его вечно. Берём
+            # собранное и закрываем pipe со своей стороны.
+            stdout, stderr = _decode(exc.output), _decode(exc.stderr)
+            for pipe in (proc.stdout, proc.stderr):
+                if pipe is not None:
+                    pipe.close()
+            proc.wait()
     finally:
         _kill_group(proc.pid)
     return ProcResult(
@@ -71,6 +83,14 @@ def run(
         stderr=stderr or "",
         timed_out=timed_out,
     )
+
+
+def _decode(data) -> str:
+    if data is None:
+        return ""
+    if isinstance(data, bytes):
+        return data.decode("utf-8", errors="replace")
+    return data
 
 
 def _kill_group(pgid: int) -> None:

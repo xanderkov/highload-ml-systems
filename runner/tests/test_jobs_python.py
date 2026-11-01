@@ -155,3 +155,19 @@ def test_malformed_metrics_is_output_error(tmp_path):
 
     assert result["status"] == "output_error"
     assert "metrics" in result["log"]
+
+
+def test_reserved_speedup_metric_is_output_error(tmp_path):
+    # Метрика с именем speedup подменила бы измеренное ускорение в вердикте.
+    harness = tmp_path / "h"
+    harness.mkdir()
+    (harness / "meta.yml").write_text("kind: ab\nlang: python\nrepeats: 2\nwarmup: 0\n")
+    (harness / "bench.py").write_text(
+        "import json\n"
+        "print(json.dumps({'samples': [{'a': 1.0, 'b': 1.0}] * 2, "
+        "'check': {'a': 1.0, 'b': 1.0}, 'metrics': {'a': {'speedup': 1.0}, 'b': {'speedup': 1000.0}}}))\n"
+    )
+    result = run_job(metrics_job({"metric": "speedup", "op": ">=", "value": 2}) | {"harness_dir": str(harness)})
+
+    assert result["status"] == "output_error"
+    assert "speedup" in result["log"]
