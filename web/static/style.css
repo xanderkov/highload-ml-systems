@@ -1445,3 +1445,24 @@ button.cow-object:focus-visible { outline: 1px solid var(--color-accent); outlin
 .cow-pages .cow-note, .cow-pages .cow-help { margin: 0; padding: 10px 16px; font-size: 12px; line-height: 1.6; }
 .cow-pages .cow-note { border-top: 1px solid var(--color-border); min-height: 44px; }
 .cow-pages .cow-help { color: var(--color-dim); }
+
+/* ── pymalloc-arenas: арены, пулы, блоки ────────────────────────────── */
+.pm-stage { display: grid; gap: 14px; padding: 16px; background: var(--color-code-bg); }
+.pm-arenas { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.pm-arena { border: 1px solid var(--color-border-strong); padding: 6px; font-size: 11px; }
+.pm-arena.is-absent { border-style: dashed; border-color: var(--color-border); }
+.pm-arena.is-returned { border-style: dashed; border-color: var(--color-border); opacity: 0.45; }
+.pm-arena-head { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 6px; color: var(--color-dim); font-size: 10px; }
+.pm-pools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.pm-pool { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; padding: 3px; border: 1px solid var(--color-hairline); }
+.pm-pool.is-empty { border-style: dashed; }
+.pm-block { display: block; height: 10px; padding: 0; border: 1px solid var(--color-hairline); background: transparent; }
+.pm-block.is-live { background: var(--color-accent); border-color: var(--color-accent); }
+button.pm-block { cursor: pointer; }
+button.pm-block:hover { background: var(--color-accent-lt); }
+button.pm-block:focus-visible { outline: 1px solid var(--color-fg); outline-offset: 1px; }
+.pm-stats { display: flex; flex-wrap: wrap; gap: 18px; font-size: 12px; color: var(--color-muted); font-variant-numeric: tabular-nums; }
+.pm-stats strong { color: var(--color-fg); font-weight: 500; }
+.pymalloc-arenas .pm-note, .pymalloc-arenas .pm-help { margin: 0; padding: 10px 16px; font-size: 12px; line-height: 1.6; }
+.pymalloc-arenas .pm-note { border-top: 1px solid var(--color-border); min-height: 44px; }
+.pymalloc-arenas .pm-help { color: var(--color-dim); }
