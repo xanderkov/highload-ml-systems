@@ -3,17 +3,27 @@
 Сервис из кода блока (unit_a.py) поднимается один раз: один воркер uvicorn,
 у torch TORCH_THREADS поток(ов), процессы сервиса привязаны ко всем CPU,
 кроме одного — на нём работает генератор нагрузки (servicelib.split_cpus).
-Затем ступени по RPS: на каждой открытая нагрузка STEP_S секунд — запросы
-уходят по расписанию, не дожидаясь ответов на предыдущие.
+После прогрева — замер ёмкости C: PROBE_CONNECTIONS соединений шлют запросы
+подряд (закрытый цикл, у сервиса всегда есть очередь), C — ответов в секунду.
+Ступени зависят от машины: доли C до насыщения и C + OVERLOAD_RPS выше него.
+На каждой ступени открытая нагрузка STEP_S секунд — запросы уходят по
+расписанию, не дожидаясь ответов на предыдущие.
 
-Линии (x — RPS ступени):
-- p50 и p99 latency, мс — от запланированного момента отправки до ответа;
-- CPU сервиса, % — процессорное время всех процессов сервиса за ступень,
-  делённое на (длительность ступени × число CPU сервиса). 100 % значило бы,
-  что заняты все CPU, отданные сервису.
+Перегрузка задаётся абсолютным превышением, а не долей C: генератор на одном
+CPU с этими телами (~100 КиБ JSON) отстаёт от расписания тем раньше, чем
+больше превышение и выше сам RPS. Замеры: при C ≈ 220 превышение +100 ещё
+честно, +130 — уже lag; при C ≈ 450 +60 честно, +80 — lag; без перегрузки
+генератор держит 700 RPS. Поэтому ступени C + 30 и C + 60, а потолок
+GENERATOR_MAX_RPS — самая высокая проверенная верхняя ступень (510 RPS при
+C ≈ 450) с округлением. Выше харнесс прямо говорит, что машина слишком
+быстрая, а не рисует сомнительный замер. Отставание на любой ступени ловит и
+сам run_load (LoadGeneratorLagging).
 """
+import http.client
 import json
+import os
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -23,10 +33,55 @@ import servicelib
 import tinymodel
 
 TORCH_THREADS = 1
-STEPS = [50, 100, 150, 200, 250, 300]
+UNDER_FRACTIONS = [0.25, 0.5, 0.75, 0.9]  # ступени ниже ёмкости, доли C
+OVERLOAD_RPS = [30, 60]  # ступени выше ёмкости: C + столько RPS
+GENERATOR_MAX_RPS = 520  # проверенная верхняя ступень для этих тел, см. docstring
 STEP_S = 3.0
 WARMUP_RPS = 20
 WARMUP_S = 1.0
+PROBE_CONNECTIONS = 4
+PROBE_S = 1.5
+
+
+def probe_capacity(url: str, body: bytes, cpus: set[int]) -> float:
+    """Ответов в секунду при постоянной очереди: закрытый цикл в несколько соединений."""
+    host, port = url.split("://", 1)[1].rsplit(":", 1)
+    done = [0] * PROBE_CONNECTIONS
+    failed = []
+    deadline = time.perf_counter() + PROBE_S
+
+    def client(k: int) -> None:
+        conn = http.client.HTTPConnection(host, int(port), timeout=10)
+        try:
+            while time.perf_counter() < deadline:
+                conn.request("POST", "/predict", body, {"Content-Type": "application/json"})
+                response = conn.getresponse()
+                response.read()
+                if response.status != 200:
+                    failed.append(response.status)
+                    return
+                done[k] += 1
+        except OSError as exc:
+            failed.append(exc)
+        finally:
+            conn.close()
+
+    # Потоки наследуют привязку создающего потока: клиенты работают на CPU генератора.
+    old = os.sched_getaffinity(0)
+    os.sched_setaffinity(0, cpus)
+    try:
+        started = time.perf_counter()
+        threads = [threading.Thread(target=client, args=(k,)) for k in range(PROBE_CONNECTIONS)]
+        for t in threads:
+            t.start()
+    finally:
+        os.sched_setaffinity(0, old)
+    for t in threads:
+        t.join()
+    if failed:
+        print(f"замер ёмкости: сервис ответил ошибкой: {failed[0]}", file=sys.stderr)
+        sys.exit(1)
+    return sum(done) / (time.perf_counter() - started)
 
 
 def main() -> None:
@@ -68,7 +123,20 @@ def main() -> None:
             print("ответ сервиса не совпадает с выходом модели для этого изображения", file=sys.stderr)
             sys.exit(1)
 
-        for rps in STEPS:
+        capacity = probe_capacity(url, body, load_cpus)
+        steps = [max(10, round(capacity * f / 10) * 10) for f in UNDER_FRACTIONS]
+        steps += [round(capacity / 10) * 10 + extra for extra in OVERLOAD_RPS]
+        print(f"ёмкость сервиса C ≈ {capacity:.0f} ответов/с; ступени {steps} RPS", file=sys.stderr)
+        if steps[-1] > GENERATOR_MAX_RPS:
+            print(
+                f"сервис на этой машине слишком быстрый для крючка: нужна нагрузка {steps[-1]} RPS, "
+                f"а генератор нагрузки на одном CPU проверен только до {GENERATOR_MAX_RPS} RPS "
+                f"с телами по {len(body) / 1024:.0f} КиБ. Замер выше был бы нечестным",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        for rps in steps:
             cpu_before = servicelib.cpu_seconds(url.pids())
             started = time.perf_counter()
             result = servicelib.run_load(url, rps=rps, duration_s=STEP_S, make_body=make_body,
