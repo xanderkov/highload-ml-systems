@@ -1,0 +1,7 @@
+kind: series
+lang: python
+# auto: OMP_NUM_THREADS runner не задаёт — число потоков torch закрепляет
+# сам bench.py (один поток на вызов модели, в любом потоке Python).
+threads: auto
+timeout_s: 60
+memory_mb: 2048

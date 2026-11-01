@@ -173,3 +173,42 @@ def test_cow_misaligned_scores_are_incorrect():
     assert result["status"] == "ok", result
     assert result["correct"] is False, result
     assert result["passed"] is False, result
+
+
+# ── Раздел «Python как рантайм сервиса», подглава 4 (event loop) ─────────
+
+
+@pytest.mark.content
+def test_loop_lag_to_thread_unblocks_loop():
+    """Синхронная модель останавливает цикл на весь инференс, to_thread — нет."""
+    section, block = find_block("python-runtime", "loop-lag")
+    code = read_snippet("loop_lag.py").replace("return model(x)", "return await asyncio.to_thread(model, x)")
+    response = httpx.post(f"{RUNNER_URL}/run", json=build_job(section, block, code), timeout=REQUEST_TIMEOUT_S)
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["status"] == "ok", result
+    max_lag = {line["name"]: max(point["y"] for point in line["points"]) for line in result["lines"]}
+    assert max_lag["blocking"] > 20, max_lag
+    assert max_lag["ваш handle"] < 10, max_lag
+
+
+# ── Раздел «Python как рантайм сервиса», задание 3 (сериализация) ───────
+
+
+@pytest.mark.content
+def test_decode_wrong_dtype_is_incorrect():
+    code = read_snippet("decode_ref.py").replace("torch.float32", "torch.float64")
+    result = execute_exercise("python-runtime", "decode-exercise", code)
+    assert result["status"] == "ok" and result["correct"] is False
+
+
+@pytest.mark.content
+def test_decode_swapped_axes_are_incorrect():
+    """Высота и ширина перепутаны: форма и сумма те же, позиции — нет."""
+    reference = read_snippet("decode_ref.py")
+    code = reference.replace("pixels.transpose(2, 0, 1)", "pixels.transpose(2, 1, 0)")
+    assert code != reference
+    result = execute_exercise("python-runtime", "decode-exercise", code)
+    assert result["status"] == "ok", result
+    assert result["correct"] is False, result
+    assert result["passed"] is False, result
