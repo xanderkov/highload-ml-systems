@@ -225,14 +225,12 @@ async def _run(host: str, port: int, path: str, rps: float, duration_s: float,
     for _ in range(min(_INITIAL_CONNECTIONS, max(n, 1))):
         free.append(await asyncio.open_connection(host, port))
 
-    lags: list = [None] * n
+    lags = [0.0] * n
     done_at = [0.0] * n
     responses: list = [None] * n
 
     async def send(conn, i: int, due: float, request: bytes):
         reader, writer = conn
-        if lags[i] is None:
-            lags[i] = time.perf_counter() - due  # фактическая отправка: тело готово, соединение есть
         writer.write(request)
         return await _read_response(reader)
 
@@ -263,12 +261,15 @@ async def _run(host: str, port: int, path: str, rps: float, duration_s: float,
         return data if status == 200 else None
 
     async def fire(i: int, due: float):
+        body = make_body(i)
+        # Lag — только собственная задержка генератора (планирование + make_body). Ожидание
+        # соединения сюда не входит: если сервис перегружен и не принимает соединения,
+        # это его latency/ошибки, а не вина генератора.
+        lags[i] = time.perf_counter() - due
         try:
-            responses[i] = await asyncio.wait_for(exchange(i, due, make_body(i)), timeout_s)
+            responses[i] = await asyncio.wait_for(exchange(i, due, body), timeout_s)
         except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError, ValueError, IndexError):
             responses[i] = None
-        if lags[i] is None:  # не дошли до отправки
-            lags[i] = time.perf_counter() - due
         done_at[i] = time.perf_counter() - due
 
     loop = asyncio.get_running_loop()
@@ -296,7 +297,8 @@ def run_load(url: str, *, path: str = "/predict", rps: float, duration_s: float,
 
     Генератор работает в вызывающем потоке, на время замера привязанном к cpus.
     make_body(i) вызывается в момент отправки — он должен быть дешёвым (заготовьте тела заранее):
-    lag меряется прямо перед записью в сокет и включает make_body и ожидание соединения.
+    lag = момент, когда тело готово, − план (планирование + make_body); ожидание соединения
+    и ответа — это latency сервиса, а не lag генератора.
     Бросает LoadGeneratorLagging, если p99 отставания отправки от плана > 5 мс.
     """
     host_port = url.split("://", 1)[1].rstrip("/")

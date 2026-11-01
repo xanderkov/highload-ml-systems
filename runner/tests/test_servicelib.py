@@ -157,6 +157,17 @@ def test_lagging_generator_is_reported(fast_app):
         run_load(url, rps=1000, duration_s=0.5, make_body=slow_body, content_type=OCTET, cpus=LOAD)
 
 
+def test_saturated_service_is_latency_not_generator_lag(slow_app):
+    # 200 RPS на сервис с ёмкостью 5 RPS и очередью accept в 1 соединение: connect виснет
+    # (SYN отбрасываются), ответы копятся, но это latency/ошибки сервиса, а не lag генератора.
+    with start_service(slow_app, cpus=SERVICE, env={"UVICORN_BACKLOG": "1"}) as url:
+        result = run_load(url, rps=200, duration_s=3, make_body=lambda i: b"x", content_type=OCTET,
+                          cpus=LOAD, timeout_s=2)
+    assert result.lag_ms_p99 < 5
+    assert result.errors > 0
+    assert result.p50() > 500
+
+
 def test_health_check_ignores_proxy_env(fast_app, monkeypatch):
     monkeypatch.setenv("http_proxy", "http://127.0.0.1:9")
     monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:9")
