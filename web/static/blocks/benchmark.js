@@ -70,19 +70,23 @@ export function mount(element, { sectionId, blockId, params, lang }) {
         status.textContent = statusLabel(data);
         return;
       }
-      status.textContent = data.series ? `${data.series.length} точек` : "замер готов";
-      if (params.history_parameter && editor && !data.series) {
+      status.textContent = data.series ? `${data.series.length} точек` : data.lines ? `${data.lines.length} линий` : "замер готов";
+      if (params.history_parameter && editor && !data.series && !data.lines) {
         const assignment = code.split("\n").find(line => line.trim().startsWith(`${params.history_parameter} =`));
         const value = assignment?.split("=").slice(1).join("=").split("#")[0].trim() || "—";
         const correct = data.correct !== false;
         result.innerHTML = `<p class="${correct ? 'good' : 'bad'}">${correct ? 'Результат совпадает с ожидаемым' : 'Результат не совпадает с ожидаемым'}</p>`;
         history.push({value, ms: data.student_ms, correct});
         element.querySelector(".benchmark-history").innerHTML = `<table class="numbers"><thead><tr><th>${escapeHtml(params.history_parameter)}</th><th>Время</th><th>Результат</th></tr></thead><tbody>${history.map(row => `<tr><td>${escapeHtml(row.value)}</td><td>${formatMs(row.ms)}</td><td>${row.correct ? 'Совпадает' : 'Не совпадает'}</td></tr>`).join('')}</tbody></table>`;
-      } else if (params.single_result && !data.series) {
+      } else if (params.single_result && !data.series && !data.lines) {
         result.innerHTML = `<p><strong>${formatMs(data.student_ms)}</strong><br>${data.correct ? 'Результат совпадает с ожидаемым' : 'Результат не совпадает с ожидаемым'}</p>`;
       } else if (data.series) {
         result.innerHTML = renderCompileCommand(data);
         drawSweep(chart, data.series, params);
+        caption.textContent = params.caption || "";
+      } else if (data.lines) {
+        result.innerHTML = renderCompileCommand(data);
+        drawLines(chart, data.lines, params);
         caption.textContent = params.caption || "";
       } else {
         result.innerHTML = renderPair(data, params) + renderCompileCommand(data);
@@ -143,6 +147,55 @@ function drawSweep(container, series, params) {
       ],
     },
     [xs, ys],
+    container
+  );
+
+  const resize = () => plot.setSize({ width: container.clientWidth || 640, height: 300 });
+  window.addEventListener("resize", resize);
+  container._chart = { plot, resize };
+}
+
+// Несколько линий на одном графике: каждая линия — отдельная серия uPlot.
+// uPlot требует общую ось X, поэтому x-значения всех линий объединяются, а
+// там, где у линии нет точки, стоит null (с spanGaps линия идёт через пропуск).
+const LINE_FALLBACKS = ["#2f6feb", "#2da44e", "#d1242f", "#8250df", "#bf8700", "#1a7f8e"];
+
+function drawLines(container, lines, params) {
+  const options = { ...CHART_DEFAULTS, ...params };
+  const xs = [...new Set(lines.flatMap((line) => line.points.map((point) => point.x)))].sort((a, b) => a - b);
+  const columns = lines.map((line) => {
+    const byX = new Map(line.points.map((point) => [point.x, point.y]));
+    return xs.map((x) => (byX.has(x) ? byX.get(x) : null));
+  });
+
+  const positive = (values) => values.every((value) => value === null || value > 0);
+  const logY = options.log_y === true && columns.every(positive);
+  const fg = cssVar(container, "--color-fg", "#1a1a1a");
+
+  disposeChart(container);
+  container.innerHTML = "";
+  const plot = new uPlot(
+    {
+      width: container.clientWidth || 640,
+      height: 300,
+      scales: { x: { time: false }, y: logY ? { distr: 3 } : {} },
+      axes: [
+        { label: options.x_label, stroke: fg },
+        { label: options.y_label, stroke: fg },
+      ],
+      legend: { show: true },
+      series: [
+        { label: options.x_label },
+        ...lines.map((line, index) => ({
+          label: line.name,
+          stroke: LINE_FALLBACKS[index % LINE_FALLBACKS.length],
+          width: 2,
+          spanGaps: true,
+          points: { show: true },
+        })),
+      ],
+    },
+    [xs, ...columns],
     container
   );
 

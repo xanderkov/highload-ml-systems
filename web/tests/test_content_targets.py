@@ -94,6 +94,10 @@ def test_benchmark_block_runs(section, block):
         sizes = harness_meta(section, block)["sizes"]
         assert [point["size"] for point in result["series"]] == list(sizes)
         assert all(point["ms_per_element"] > 0 for point in result["series"]), result
+    elif "lines" in result:
+        # series-харнесс: набор линий, у каждой непустой список числовых точек.
+        assert result["lines"], result
+        assert all(line["points"] for line in result["lines"]), result
     else:
         # A/B-бенчмарк сравнивает два варианта одного вычисления: если их
         # ответы разошлись, сравнивать время бессмысленно — это ошибка в

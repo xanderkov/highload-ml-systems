@@ -24,7 +24,7 @@ MEMORY_MB = int(os.environ.get("BENCH_MEMORY_MB", "2048"))
 MAX_SPEEDUP = 1_000_000.0
 
 SUPPORTED_LANGS = {"c", "python"}
-SUPPORTED_KINDS = {"ab", "sweep"}
+SUPPORTED_KINDS = {"ab", "sweep", "series"}
 
 
 def load_meta(harness_dir: str) -> tuple[Path, dict]:
@@ -79,6 +79,12 @@ def run_job(job: dict) -> dict:
         return {
             "status": "unsupported_kind",
             "message": f"Тип харнесса {kind!r} пока не поддерживается",
+        }
+    if kind == "series" and lang != "python":
+        # Многолинейные графики пока делают только Python-харнессы.
+        return {
+            "status": "unsupported_kind",
+            "message": f"Тип харнесса {kind!r} поддерживается только для Python",
         }
     threads = meta.get("threads", 1)
     if threads not in (1, "auto") or isinstance(threads, bool):
@@ -145,6 +151,8 @@ def run_job(job: dict) -> dict:
 
         if kind == "sweep":
             payload, error = _parse_sweep_output(proc.stdout, len(sizes))
+        elif kind == "series":
+            payload, error = _parse_lines_output(proc.stdout)
         else:
             payload, error = _parse_output(proc.stdout, repeats, tuple(job["units"]))
             if error is None:
@@ -165,6 +173,14 @@ def run_job(job: dict) -> dict:
             "status": "ok",
             "compile_command": compile_command,
             "series": payload["series"],
+        }
+
+    if kind == "series":
+        # Как и sweep, series не сравнивает две реализации: только линии.
+        return {
+            "status": "ok",
+            "compile_command": compile_command,
+            "lines": payload["lines"],
         }
 
     stats = ab_result(payload["samples"], payload["check"], float(meta.get("tolerance", 1e-9)))
@@ -273,4 +289,36 @@ def _parse_sweep_output(stdout: str, expected_points: int) -> tuple[dict | None,
     for point in series:
         if not isinstance(point, dict) or "size" not in point or "ms_per_element" not in point:
             return None, "точка series не содержит size и ms_per_element"
+    return payload, None
+
+
+def _is_number(value) -> bool:
+    return not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(value)
+
+
+def _parse_lines_output(stdout: str) -> tuple[dict | None, str | None]:
+    """Разбирает последнюю строку вывода как JSON с lines для kind: series.
+
+    Проверяется: непустой lines, у каждой линии строка name и непустой points,
+    у каждой точки конечные числовые x и y (JSON-булевы значения не числа).
+    """
+    lines = stdout.strip().splitlines()
+    if not lines:
+        return None, "пустой вывод бенчмарка"
+    try:
+        payload = json.loads(lines[-1])
+        chart_lines = payload["lines"]
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        return None, f"не удалось разобрать JSON бенчмарка: {exc}"
+    if not isinstance(chart_lines, list) or not chart_lines:
+        return None, "бенчмарк не вернул ни одной линии lines"
+    for line in chart_lines:
+        if not isinstance(line, dict) or not isinstance(line.get("name"), str):
+            return None, "линия lines не содержит строку name"
+        points = line.get("points")
+        if not isinstance(points, list) or not points:
+            return None, f"линия {line['name']!r} не содержит точек"
+        for point in points:
+            if not isinstance(point, dict) or not _is_number(point.get("x")) or not _is_number(point.get("y")):
+                return None, f"точка линии {line['name']!r} не содержит числовых x и y"
     return payload, None
