@@ -107,6 +107,14 @@ def _build_block(section: Section, info: str, body: str) -> Block:
                     f"{section.dir / 'section.md'}: exercise {attrs['id']} без поля {field}"
                 )
         _require_harness(section, params["harness"])
+        harness_kind = _harness_kind(section, params["harness"])
+        if harness_kind != "ab":
+            # Упражнение показывает A/B-результат (ускорение, разброс, вердикт);
+            # sweep/series этих полей не возвращают.
+            raise ContentError(
+                f"{section.dir / 'section.md'}: exercise {attrs['id']}: харнесс {params['harness']} "
+                f"имеет kind: {harness_kind}, а упражнению нужен kind: ab"
+            )
         params["starter_code"] = _require_file(section, params["starter"], "starter")
         _require_file(section, params["reference"], "reference")
 

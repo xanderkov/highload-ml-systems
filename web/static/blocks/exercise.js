@@ -265,6 +265,17 @@ function metricBand(data, params) {
     </div>`;
 }
 
+/** Харнесс объясняет расхождение в stderr (dtype, форма, max diff, checksum):
+    без этого студент видит только «не совпадает» и не знает, что чинить. */
+function diagnostics(data) {
+  const text = typeof data.stderr === "string" ? data.stderr.trim() : "";
+  if (!text) return "";
+  return `<details class="compile-command harness-log" open>
+    <summary>Что сообщила проверка</summary>
+    <pre>${escapeHtml(text)}</pre>
+  </details>`;
+}
+
 function verdict(data, params) {
   if (data.passed) return passBand(data, params);
 
@@ -276,7 +287,7 @@ function verdict(data, params) {
         ? `<p class="hint">Похоже, компилятор выбросил вычисление целиком: его результат
            нигде не используется.</p>`
         : "";
-    return `<p class="bad">Результат разошёлся со стартовым кодом — оптимизация что-то сломала.</p>${hint}`;
+    return `<p class="bad">Результат разошёлся со стартовым кодом — оптимизация что-то сломала.</p>${hint}${diagnostics(data)}`;
   }
 
   // Код верен, но порог не взят. Это не ошибка, а недобор, и выглядеть он

@@ -175,6 +175,24 @@ def test_cow_misaligned_scores_are_incorrect():
     assert result["passed"] is False, result
 
 
+@pytest.mark.content
+def test_cow_lookup_from_key_formula_is_incorrect():
+    """Записи — псевдослучайные: вычислить их из ключа, не храня данных, нельзя."""
+    code = (
+        "def build_data(records):\n"
+        "    return bytearray(32 << 20)  # только чтобы RSS родителя вырос\n\n\n"
+        "def prepare(data):\n"
+        "    pass\n\n\n"
+        "def lookup(data, key):\n"
+        "    i = int(key[3:])\n"
+        "    return i, -(i % 5000) / 100.0\n"
+    )
+    result = execute_exercise("python-runtime", "cow-exercise", code)
+    assert result["status"] == "ok", result
+    assert result["correct"] is False, result
+    assert result["passed"] is False, result
+
+
 # ── Раздел «Python как рантайм сервиса», подглава 4 (event loop) ─────────
 
 

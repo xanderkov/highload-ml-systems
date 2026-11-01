@@ -20,6 +20,15 @@ const CHART_DEFAULTS = {
   x_factor: 1,
 };
 
+/** Русское склонение после числа: 1 линия, 2 линии, 5 линий. */
+function plural(n, one, few, many) {
+  const m = n % 100;
+  if (m >= 11 && m <= 14) return many;
+  const d = n % 10;
+  if (d === 1) return one;
+  return d >= 2 && d <= 4 ? few : many;
+}
+
 export function mount(element, { sectionId, blockId, params, lang }) {
   if (params.parallel_editors) return mountComparison(element, { sectionId, blockId, params });
   element.classList.add("benchmark");
@@ -70,7 +79,7 @@ export function mount(element, { sectionId, blockId, params, lang }) {
         status.textContent = statusLabel(data);
         return;
       }
-      status.textContent = data.series ? `${data.series.length} точек` : data.lines ? `${data.lines.length} линий` : "замер готов";
+      status.textContent = data.series ? `${data.series.length} ${plural(data.series.length, "точка", "точки", "точек")}` : data.lines ? `${data.lines.length} ${plural(data.lines.length, "линия", "линии", "линий")}` : "замер готов";
       if (params.history_parameter && editor && !data.series && !data.lines) {
         const assignment = code.split("\n").find(line => line.trim().startsWith(`${params.history_parameter} =`));
         const value = assignment?.split("=").slice(1).join("=").split("#")[0].trim() || "—";

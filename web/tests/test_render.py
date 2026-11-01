@@ -103,6 +103,19 @@ def test_exercise_with_missing_harness_fails(tmp_path):
         render_section(section)
 
 
+def test_exercise_over_non_ab_harness_fails(tmp_path):
+    # exercise.js рисует A/B-результат (ускорение, разброс); у sweep/series
+    # таких полей нет, и блок упал бы в браузере.
+    section = make_section(
+        tmp_path,
+        "```exercise id=x lang=c\ntitle: Т\ntarget: speedup >= 3\n"
+        "starter: snippets/sum_starter.c\nreference: snippets/sum_ref.c\nharness: stride\n```\n",
+    )
+
+    with pytest.raises(ContentError, match="x.*stride.*sweep.*ab"):
+        render_section(section)
+
+
 def test_benchmark_resolves_variant_files(tmp_path):
     section = make_section(
         tmp_path,
