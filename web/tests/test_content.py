@@ -1,0 +1,92 @@
+import pytest
+
+from app.content import ContentError, list_sections, load_section
+
+SECTION = """---
+id: cpu-cache
+title: Кэш процессора
+order: 10
+---
+
+Текст раздела.
+"""
+
+
+def write_section(root, name, text):
+    directory = root / name
+    directory.mkdir(parents=True)
+    (directory / "section.md").write_text(text, encoding="utf-8")
+    return directory
+
+
+def test_load_section_reads_frontmatter(tmp_path):
+    directory = write_section(tmp_path, "01-cpu-cache", SECTION)
+
+    section = load_section(directory)
+
+    assert section.id == "cpu-cache"
+    assert section.title == "Кэш процессора"
+    assert section.order == 10
+    assert section.draft is False
+    assert section.body.strip() == "Текст раздела."
+
+
+def test_load_section_without_frontmatter_fails(tmp_path):
+    directory = write_section(tmp_path, "01-broken", "Просто текст\n")
+
+    with pytest.raises(ContentError, match="фронтматтер"):
+        load_section(directory)
+
+
+def test_load_section_without_title_fails(tmp_path):
+    directory = write_section(tmp_path, "01-broken", "---\nid: x\norder: 10\n---\n\nтекст\n")
+
+    with pytest.raises(ContentError, match="title"):
+        load_section(directory)
+
+
+def test_list_sections_sorted_by_order(tmp_path):
+    write_section(tmp_path, "b", "---\nid: b\ntitle: Б\norder: 20\n---\n\nb\n")
+    write_section(tmp_path, "a", "---\nid: a\ntitle: А\norder: 10\n---\n\na\n")
+
+    assert [s.id for s in list_sections(tmp_path)] == ["a", "b"]
+
+
+def test_list_sections_skips_drafts(tmp_path):
+    write_section(tmp_path, "a", "---\nid: a\ntitle: А\norder: 10\n---\n\na\n")
+    write_section(tmp_path, "d", "---\nid: d\ntitle: Д\norder: 20\ndraft: true\n---\n\nd\n")
+
+    assert [s.id for s in list_sections(tmp_path)] == ["a"]
+
+
+def test_list_sections_ignores_dirs_without_section_md(tmp_path):
+    (tmp_path / "images").mkdir()
+    write_section(tmp_path, "a", "---\nid: a\ntitle: А\norder: 10\n---\n\na\n")
+
+    assert [s.id for s in list_sections(tmp_path)] == ["a"]
+
+
+def test_load_section_with_crlf_line_endings(tmp_path):
+    directory = tmp_path / "01-crlf"
+    directory.mkdir(parents=True)
+    # Write file with CRLF line endings
+    (directory / "section.md").write_text(
+        "---\r\nid: crlf-test\r\ntitle: CRLF раздел\r\norder: 5\r\n---\r\n\r\nТекст с CRLF.\r\n",
+        encoding="utf-8"
+    )
+
+    section = load_section(directory)
+
+    assert section.id == "crlf-test"
+    assert section.title == "CRLF раздел"
+    assert section.order == 5
+    assert section.draft is False
+    assert "\r" not in section.body
+    assert section.body.strip() == "Текст с CRLF."
+
+
+def test_load_section_with_malformed_order_fails(tmp_path):
+    directory = write_section(tmp_path, "01-broken", "---\nid: x\ntitle: Т\norder: abc\n---\n\nтекст\n")
+
+    with pytest.raises(ContentError, match="order"):
+        load_section(directory)

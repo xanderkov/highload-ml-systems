@@ -1,0 +1,11 @@
+kind: ab
+lang: python
+# Внимание: на Python-пути runner не читает поле function — он не переименовывает
+# ничего, а bench.py сам берёт функцию из модулей unit_a/unit_b по имени. Поле
+# оставлено как документация контракта задания, кодом оно не используется.
+function: reduce_rows
+sizes: [2000]
+warmup: 1
+repeats: 5
+timeout_s: 180
+tolerance: 1e-9

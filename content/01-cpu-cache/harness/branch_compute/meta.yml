@@ -1,0 +1,10 @@
+kind: ab
+lang: c
+function: sum_filtered
+cflags: ["-O3"]
+sizes: [1048576]
+warmup: 2
+repeats: 9
+timeout_s: 60
+memory_mb: 1024
+tolerance: 0

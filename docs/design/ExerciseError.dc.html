@@ -1,0 +1,153 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap">
+  <style>
+    :root {
+      --bg: #fdfcfa; --fg: #1c1a17; --muted: #6b6560; --link: #1a4fa0;
+      --border: #e2ddd5; --surface: #f7f4ef; --code-bg: #f1eee8;
+      --good: #166b3c; --bad: #a8261e; --accent: #2f6feb;
+      --serif: "Literata", Georgia, serif;
+      --sans: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--fg);
+      font-family: var(--serif); font-size: 18px; line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--link); } a:hover { color: #0d3d80; }
+    main { max-width: 700px; margin: 0 auto; padding: 40px 0; }
+
+    .block {
+      margin: 0 0 28px; padding: 16px 20px 20px;
+      border: 1px solid var(--border); border-radius: 2px;
+      background: var(--surface);
+    }
+    .block-label {
+      display: block; font-family: var(--sans); font-size: 11px;
+      font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em;
+      color: var(--muted); margin-bottom: 12px;
+    }
+    .block-title {
+      font-family: var(--serif); font-size: 20px; font-weight: 700;
+      margin: 0 0 4px; line-height: 1.3;
+    }
+    .block-goal {
+      margin: 0 0 14px; font-family: var(--sans); font-size: 14px;
+      color: var(--muted);
+    }
+    .block-goal code {
+      font-family: var(--mono); font-size: 12.5px;
+      background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 2px;
+    }
+
+    .editor {
+      border: 1px solid var(--border); border-radius: 2px; background: #fff;
+      font-family: var(--mono); font-size: 13px; line-height: 1.65;
+      overflow: hidden;
+    }
+    .editor .row { display: flex; }
+    .editor .row.bad-line { background: #fdf1f0; }
+    .editor .gutter {
+      width: 38px; flex: none; text-align: right; padding-right: 10px;
+      color: #b8b2a8; background: #faf8f5; border-right: 1px solid var(--border);
+      user-select: none;
+    }
+    .editor .row.bad-line .gutter { color: var(--bad); background: #fbe9e7; font-weight: 700; }
+    .editor .code { padding-left: 12px; white-space: pre; }
+    .editor .squiggle { border-bottom: 2px wavy var(--bad); }
+    .kw { color: #a626a4; } .ty { color: #0184bc; } .fn { color: #4078f2; }
+    .nm { color: #986801; } .cm { color: #9a9691; font-style: italic; }
+
+    .controls {
+      display: flex; align-items: center; gap: 10px; margin-top: 14px;
+    }
+    .controls button {
+      font-family: var(--sans); font-size: 14px; font-weight: 500;
+      padding: 7px 16px; border: 1px solid var(--border); border-radius: 2px;
+      background: var(--bg); color: var(--fg); cursor: pointer;
+    }
+    .controls .run {
+      border-color: var(--link); color: var(--link); font-weight: 600;
+    }
+
+    .result { margin-top: 18px; }
+    .problem {
+      display: flex; align-items: baseline; gap: 10px;
+      font-family: var(--sans); font-size: 15px; font-weight: 600;
+      color: var(--bad); margin: 0 0 10px;
+    }
+    .problem .where {
+      font-family: var(--mono); font-size: 13px; font-weight: 400;
+      color: var(--muted);
+    }
+    .log {
+      margin: 0; padding: 11px 13px; max-height: 200px; overflow: auto;
+      background: #fff; border: 1px solid var(--border); border-radius: 2px;
+      font-family: var(--mono); font-size: 12px; line-height: 1.6;
+      white-space: pre-wrap; color: #55504a;
+    }
+    .log b { color: var(--bad); font-weight: 700; }
+
+    .fault-block { border-left: 3px solid var(--muted); }
+    .fault {
+      display: flex; align-items: baseline; gap: 10px;
+      font-family: var(--sans); font-size: 15px; font-weight: 600;
+      color: var(--muted); margin: 0 0 6px;
+    }
+    .fault-hint {
+      margin: 0; font-family: var(--sans); font-size: 13.5px;
+      color: var(--muted);
+    }
+  </style>
+</helmet>
+
+<main>
+  <div class="block">
+    <span class="block-label">Задание · C</span>
+    <h3 class="block-title">Ускорьте суммирование матрицы</h3>
+    <p class="block-goal">Цель: <code>speedup &gt;= 3</code></p>
+
+    <div class="editor">
+      <div class="row"><span class="gutter">1</span><span class="code"><span class="ty">double</span> <span class="fn">matrix_sum</span>(<span class="kw">const</span> <span class="ty">double</span> *a, <span class="ty">int</span> n) {</span></div>
+      <div class="row"><span class="gutter">2</span><span class="code">    <span class="ty">double</span> total = <span class="nm">0.0</span>;</span></div>
+      <div class="row bad-line"><span class="gutter">3</span><span class="code">    <span class="kw">for</span> (<span class="ty">int</span> i = <span class="nm">0</span>; i &lt; n; i++<span class="squiggle">)</span></span></div>
+      <div class="row"><span class="gutter">4</span><span class="code">        <span class="kw">for</span> (<span class="ty">int</span> j = <span class="nm">0</span>; j &lt; n; j++)</span></div>
+      <div class="row"><span class="gutter">5</span><span class="code">            total += a[(<span class="ty">long</span>)i * n + j]</span></div>
+      <div class="row"><span class="gutter">6</span><span class="code">    <span class="kw">return</span> total;</span></div>
+      <div class="row"><span class="gutter">7</span><span class="code">}</span></div>
+    </div>
+
+    <div class="controls">
+      <button class="run" type="button">Проверить</button>
+      <button class="reset" type="button">Вернуть исходный код</button>
+    </div>
+
+    <div class="result">
+      <p class="problem">Код не скомпилировался<span class="where">строка 3</span></p>
+      <pre class="log">unit_b.c:3:34: <b>error:</b> expected ';' before ')' token
+    3 |     for (int i = 0; i &lt; n; i++)
+      |                                  ^</pre>
+    </div>
+  </div>
+
+  <div class="block fault-block">
+    <span class="block-label">Задание · C — сбой сервиса</span>
+    <div class="result" style="margin-top: 0">
+      <p class="fault">Сбой сервиса замеров</p>
+      <p class="fault-hint">Это ошибка в материалах курса, а не в вашем коде.
+      Замер не выполнялся — попробуйте ещё раз.</p>
+    </div>
+  </div>
+</main>
+</x-dc>
+</body>
+</html>

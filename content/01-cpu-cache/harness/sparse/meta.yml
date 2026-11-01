@@ -1,0 +1,10 @@
+kind: ab
+lang: c
+function: cache_probe
+cflags: ["-O3", "-fno-tree-vectorize"]
+sizes: [64]
+warmup: 2
+repeats: 9
+timeout_s: 60
+tolerance: 0
+memory_mb: 1024

@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap">
+  <style>
+    /* Тёмная тема. В реальной таблице стилей эти же токены приходят из
+       @media (prefers-color-scheme: dark); здесь заданы прямо, чтобы артборд
+       выглядел тёмным независимо от настройки смотрящего. */
+    :root {
+      --bg: #16171a; --fg: #e8e4de; --muted: #9d968d; --link: #7ab6ff;
+      --border: #33353a; --surface: #1c1e22; --code-bg: #212429;
+      --quote-border: #4a4d54; --good: #5ac37f; --bad: #ff8a80; --accent: #6ea8ff;
+      --serif: "Literata", Georgia, "Times New Roman", serif;
+      --sans: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--fg);
+      font-family: var(--serif); font-size: 18px; line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--link); } a:hover { color: #a8d0ff; }
+    .site-header {
+      border-bottom: 1px solid var(--border);
+      padding: 14px 110px;
+      font-family: var(--sans); font-size: 14px; font-weight: 600;
+    }
+    .site-header a { text-decoration: none; }
+    main { max-width: 700px; margin: 0 auto; padding: 44px 0 60px; }
+    h2 {
+      font-family: var(--serif); font-size: 27px; font-weight: 700;
+      line-height: 1.25; letter-spacing: -0.01em;
+      margin: 0 0 0.7em; text-wrap: pretty;
+    }
+    h2 .num {
+      font-family: var(--sans); font-size: 13px; font-weight: 600;
+      color: var(--muted); letter-spacing: 0.08em;
+      display: block; margin-bottom: 0.5em;
+    }
+    p { margin: 1.15em 0; text-wrap: pretty; }
+    code {
+      font-family: var(--mono); font-size: 0.86em;
+      background: var(--code-bg); padding: 0.12em 0.32em; border-radius: 2px;
+    }
+    .callout {
+      margin: 2em 0; padding: 0.1em 0 0.1em 1.15em;
+      border-left: 3px solid var(--accent);
+    }
+    .callout .label {
+      display: block; font-family: var(--sans); font-size: 11px;
+      font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em;
+      color: var(--accent); margin-bottom: 0.35em;
+    }
+    .callout p { margin: 0.35em 0; font-size: 16.5px; color: var(--muted); }
+    figure { margin: 2em 0; }
+    figcaption {
+      font-family: var(--sans); font-size: 13px; color: var(--muted);
+      margin-top: 0.7em;
+    }
+    .ladder { display: flex; flex-direction: column; gap: 6px; }
+    .rung { display: flex; align-items: center; gap: 14px; }
+    .rung .name {
+      font-family: var(--sans); font-size: 12.5px; font-weight: 500;
+      width: 78px; text-align: right; color: var(--muted);
+    }
+    .rung .bar { height: 15px; background: var(--accent); border-radius: 1px; }
+    .rung .cost { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  </style>
+</helmet>
+
+<div class="site-header"><a href="#">Оптимизация инференса</a></div>
+
+<main>
+  <h2><span class="num">Раздел 1 · Часть 1</span>Вы это уже знаете</h2>
+
+  <p>Когда вы решаете, класть ли ответ в Redis, вы уже рассуждаете об иерархии
+  памяти. Поход в Postgres — это миллисекунды, попадание в Redis — сотни
+  микросекунд, словарь в памяти процесса — десятки наносекунд. Дальше идут
+  привычные выводы: горячее держим ближе, холодное — дальше. Никто не называет
+  это «оптимизацией под кэш». Это просто здравый смысл бэкендера.</p>
+
+  <p>Неприятная новость: ровно такая же лестница существует внутри одного
+  процесса, на шесть порядков ниже, и вы про неё, скорее всего, никогда не
+  думали.</p>
+
+  <figure>
+    <div class="ladder">
+      <div class="rung"><span class="name">регистр</span><span class="bar" style="width: 8px"></span><span class="cost">&lt; 1 нс</span></div>
+      <div class="rung"><span class="name">L1</span><span class="bar" style="width: 18px"></span><span class="cost">~1 нс</span></div>
+      <div class="rung"><span class="name">L2</span><span class="bar" style="width: 52px"></span><span class="cost">~4 нс</span></div>
+      <div class="rung"><span class="name">L3</span><span class="bar" style="width: 150px"></span><span class="cost">~12 нс</span></div>
+      <div class="rung"><span class="name">RAM</span><span class="bar" style="width: 340px"></span><span class="cost">~80 нс</span></div>
+    </div>
+    <figcaption>Иерархия памяти в человеческом масштабе. Пропорции настоящие,
+    абсолютные числа — нет: свои вы получите замером ниже.</figcaption>
+  </figure>
+
+  <p>Разница между уровнями этой лестницы — не проценты. Если считать, что
+  попадание в кэш первого уровня занимает секунду, то поход в оперативную
+  память в том же масштабе — около трёх минут. Между этими двумя случаями в
+  вашем коде нет ни одной видимой строчки разницы: и то и другое выглядит
+  как <code>a[i]</code>.</p>
+
+  <div class="callout">
+    <span class="label">Заметка</span>
+    <p>Все числа на этой странице вы получаете на своей машине, прямо сейчас.
+    Ни одно из них не зашито в текст: у вашего процессора свои размеры кэшей,
+    и узнать их вы должны из собственного замера, а не из чужой статьи.</p>
+  </div>
+
+  <p>Отсюда весь раздел. Мы не будем ускорять программы переписыванием на
+  другой язык. Мы будем менять порядок, в котором программа трогает память,
+  оставляя арифметику ровно той же, — и смотреть на замеры.</p>
+</main>
+</x-dc>
+</body>
+</html>

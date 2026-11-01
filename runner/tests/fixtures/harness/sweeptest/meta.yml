@@ -1,0 +1,11 @@
+kind: sweep
+lang: c
+function: touch
+cflags: ["-O2"]
+# Spans three orders of magnitude on purpose: a sweep's whole point is the
+# curve from small to large working sets, not a single point tuned to beat
+# cache. Small sizes here are expected, not a mistake.
+sizes: [64, 8192, 2000000]
+warmup: 1
+repeats: 5
+timeout_s: 10

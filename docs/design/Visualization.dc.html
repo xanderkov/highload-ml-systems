@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap">
+  <style>
+    :root {
+      --bg: #fdfcfa; --fg: #1c1a17; --muted: #6b6560; --link: #1a4fa0;
+      --border: #e2ddd5; --surface: #f7f4ef; --accent: #2f6feb;
+      --serif: "Literata", Georgia, serif;
+      --sans: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--fg);
+      font-family: var(--serif); font-size: 18px; line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--link); } a:hover { color: #0d3d80; }
+    main { max-width: 700px; margin: 0 auto; padding: 40px 0; }
+    p { margin: 1.15em 0; text-wrap: pretty; }
+
+    .block {
+      margin: 0; padding: 16px 20px 20px;
+      border: 1px solid var(--border); border-radius: 2px;
+      background: var(--surface);
+    }
+    .block-label {
+      display: block; font-family: var(--sans); font-size: 11px;
+      font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em;
+      color: var(--muted); margin-bottom: 12px;
+    }
+    .controls {
+      display: flex; align-items: center; gap: 18px; margin: 0 0 14px;
+      font-family: var(--sans); font-size: 14px;
+    }
+    .seg { display: flex; border: 1px solid var(--border); border-radius: 2px; overflow: hidden; }
+    .seg span {
+      padding: 6px 14px; cursor: pointer; background: var(--bg); color: var(--muted);
+    }
+    .seg span.on { background: var(--accent); color: #fff; font-weight: 600; }
+    .controls .toggle {
+      font-family: var(--sans); font-size: 14px; font-weight: 500;
+      padding: 6px 14px; border: 1px solid var(--border); border-radius: 2px;
+      background: var(--bg); color: var(--fg); cursor: pointer; margin-left: auto;
+    }
+    .stage {
+      background: #fff; border: 1px solid var(--border); border-radius: 2px;
+      padding: 14px; display: flex; justify-content: center;
+    }
+    .caption {
+      margin: 12px 0 0; font-family: var(--sans); font-size: 13.5px;
+      color: var(--muted);
+    }
+    .legend {
+      display: flex; gap: 18px; margin-top: 10px;
+      font-family: var(--sans); font-size: 12.5px; color: var(--muted);
+    }
+    .legend i { display: inline-block; width: 11px; height: 11px; border-radius: 1px;
+      margin-right: 6px; vertical-align: -1px; }
+  </style>
+</helmet>
+
+<main>
+  <p>Память приезжает не байтами, а блоками по 64 байта — кэш-линиями. Вот что
+  это значит для двух порядков обхода одной и той же матрицы.</p>
+
+  <div class="block">
+    <span class="block-label">Анимация · кэш-линия</span>
+
+    <div class="controls">
+      <div class="seg"><span class="on">по строкам</span><span>по столбцам</span></div>
+      <button class="toggle" type="button">Пауза</button>
+    </div>
+
+    <div class="stage">
+      <svg viewBox="0 0 460 300" width="460" height="290" role="img" aria-label="Сетка матрицы: подсвечена текущая ячейка и подтянутая с ней кэш-линия">
+        <g>
+          <!-- 20x16 grid of cells -->
+          <g fill="#eceae6">
+            <!-- rows rendered as repeated rects -->
+            <g id="r">
+              <rect x="10" y="10" width="16" height="16"/>
+            </g>
+          </g>
+        </g>
+        <!-- explicit grid -->
+        <g>
+          <!-- background cells -->
+          <g fill="#edebe7">
+            <g>
+              <rect x="10"  y="10"  width="16" height="16"/><rect x="32"  y="10"  width="16" height="16"/><rect x="54"  y="10"  width="16" height="16"/><rect x="76"  y="10"  width="16" height="16"/><rect x="98"  y="10"  width="16" height="16"/><rect x="120" y="10"  width="16" height="16"/><rect x="142" y="10"  width="16" height="16"/><rect x="164" y="10"  width="16" height="16"/><rect x="186" y="10"  width="16" height="16"/><rect x="208" y="10"  width="16" height="16"/><rect x="230" y="10"  width="16" height="16"/><rect x="252" y="10"  width="16" height="16"/><rect x="274" y="10"  width="16" height="16"/><rect x="296" y="10"  width="16" height="16"/><rect x="318" y="10"  width="16" height="16"/><rect x="340" y="10"  width="16" height="16"/>
+            </g>
+            <g transform="translate(0,22)"><rect x="10" y="10" width="16" height="16"/><rect x="32" y="10" width="16" height="16"/><rect x="54" y="10" width="16" height="16"/><rect x="76" y="10" width="16" height="16"/><rect x="98" y="10" width="16" height="16"/><rect x="120" y="10" width="16" height="16"/><rect x="142" y="10" width="16" height="16"/><rect x="164" y="10" width="16" height="16"/><rect x="186" y="10" width="16" height="16"/><rect x="208" y="10" width="16" height="16"/><rect x="230" y="10" width="16" height="16"/><rect x="252" y="10" width="16" height="16"/><rect x="274" y="10" width="16" height="16"/><rect x="296" y="10" width="16" height="16"/><rect x="318" y="10" width="16" height="16"/><rect x="340" y="10" width="16" height="16"/></g>
+            <g transform="translate(0,44)"><rect x="10" y="10" width="16" height="16"/><rect x="32" y="10" width="16" height="16"/><rect x="54" y="10" width="16" height="16"/><rect x="76" y="10" width="16" height="16"/><rect x="98" y="10" width="16" height="16"/><rect x="120" y="10" width="16" height="16"/><rect x="142" y="10" width="16" height="16"/><rect x="164" y="10" width="16" height="16"/><rect x="186" y="10" width="16" height="16"/><rect x="208" y="10" width="16" height="16"/><rect x="230" y="10" width="16" height="16"/><rect x="252" y="10" width="16" height="16"/><rect x="274" y="10" width="16" height="16"/><rect x="296" y="10" width="16" height="16"/><rect x="318" y="10" width="16" height="16"/><rect x="340" y="10" width="16" height="16"/></g>
+            <g transform="translate(0,88)"><rect x="10" y="10" width="16" height="16"/><rect x="32" y="10" width="16" height="16"/><rect x="54" y="10" width="16" height="16"/><rect x="76" y="10" width="16" height="16"/><rect x="98" y="10" width="16" height="16"/><rect x="120" y="10" width="16" height="16"/><rect x="142" y="10" width="16" height="16"/><rect x="164" y="10" width="16" height="16"/><rect x="186" y="10" width="16" height="16"/><rect x="208" y="10" width="16" height="16"/><rect x="230" y="10" width="16" height="16"/><rect x="252" y="10" width="16" height="16"/><rect x="274" y="10" width="16" height="16"/><rect x="296" y="10" width="16" height="16"/><rect x="318" y="10" width="16" height="16"/><rect x="340" y="10" width="16" height="16"/></g>
+            <g transform="translate(0,110)"><rect x="10" y="10" width="16" height="16"/><rect x="32" y="10" width="16" height="16"/><rect x="54" y="10" width="16" height="16"/><rect x="76" y="10" width="16" height="16"/><rect x="98" y="10" width="16" height="16"/><rect x="120" y="10" width="16" height="16"/><rect x="142" y="10" width="16" height="16"/><rect x="164" y="10" width="16" height="16"/><rect x="186" y="10" width="16" height="16"/><rect x="208" y="10" width="16" height="16"/><rect x="230" y="10" width="16" height="16"/><rect x="252" y="10" width="16" height="16"/><rect x="274" y="10" width="16" height="16"/><rect x="296" y="10" width="16" height="16"/><rect x="318" y="10" width="16" height="16"/><rect x="340" y="10" width="16" height="16"/></g>
+            <g transform="translate(0,132)"><rect x="10" y="10" width="16" height="16"/><rect x="32" y="10" width="16" height="16"/><rect x="54" y="10" width="16" height="16"/><rect x="76" y="10" width="16" height="16"/><rect x="98" y="10" width="16" height="16"/><rect x="120" y="10" width="16" height="16"/><rect x="142" y="10" width="16" height="16"/><rect x="164" y="10" width="16" height="16"/><rect x="186" y="10" width="16" height="16"/><rect x="208" y="10" width="16" height="16"/><rect x="230" y="10" width="16" height="16"/><rect x="252" y="10" width="16" height="16"/><rect x="274" y="10" width="16" height="16"/><rect x="296" y="10" width="16" height="16"/><rect x="318" y="10" width="16" height="16"/><rect x="340" y="10" width="16" height="16"/></g>
+            <g transform="translate(0,154)"><rect x="10" y="10" width="16" height="16"/><rect x="32" y="10" width="16" height="16"/><rect x="54" y="10" width="16" height="16"/><rect x="76" y="10" width="16" height="16"/><rect x="98" y="10" width="16" height="16"/><rect x="120" y="10" width="16" height="16"/><rect x="142" y="10" width="16" height="16"/><rect x="164" y="10" width="16" height="16"/><rect x="186" y="10" width="16" height="16"/><rect x="208" y="10" width="16" height="16"/><rect x="230" y="10" width="16" height="16"/><rect x="252" y="10" width="16" height="16"/><rect x="274" y="10" width="16" height="16"/><rect x="296" y="10" width="16" height="16"/><rect x="318" y="10" width="16" height="16"/><rect x="340" y="10" width="16" height="16"/></g>
+            <g transform="translate(0,176)"><rect x="10" y="10" width="16" height="16"/><rect x="32" y="10" width="16" height="16"/><rect x="54" y="10" width="16" height="16"/><rect x="76" y="10" width="16" height="16"/><rect x="98" y="10" width="16" height="16"/><rect x="120" y="10" width="16" height="16"/><rect x="142" y="10" width="16" height="16"/><rect x="164" y="10" width="16" height="16"/><rect x="186" y="10" width="16" height="16"/><rect x="208" y="10" width="16" height="16"/><rect x="230" y="10" width="16" height="16"/><rect x="252" y="10" width="16" height="16"/><rect x="274" y="10" width="16" height="16"/><rect x="296" y="10" width="16" height="16"/><rect x="318" y="10" width="16" height="16"/><rect x="340" y="10" width="16" height="16"/></g>
+            <g transform="translate(0,198)"><rect x="10" y="10" width="16" height="16"/><rect x="32" y="10" width="16" height="16"/><rect x="54" y="10" width="16" height="16"/><rect x="76" y="10" width="16" height="16"/><rect x="98" y="10" width="16" height="16"/><rect x="120" y="10" width="16" height="16"/><rect x="142" y="10" width="16" height="16"/><rect x="164" y="10" width="16" height="16"/><rect x="186" y="10" width="16" height="16"/><rect x="208" y="10" width="16" height="16"/><rect x="230" y="10" width="16" height="16"/><rect x="252" y="10" width="16" height="16"/><rect x="274" y="10" width="16" height="16"/><rect x="296" y="10" width="16" height="16"/><rect x="318" y="10" width="16" height="16"/><rect x="340" y="10" width="16" height="16"/></g>
+            <g transform="translate(0,220)"><rect x="10" y="10" width="16" height="16"/><rect x="32" y="10" width="16" height="16"/><rect x="54" y="10" width="16" height="16"/><rect x="76" y="10" width="16" height="16"/><rect x="98" y="10" width="16" height="16"/><rect x="120" y="10" width="16" height="16"/><rect x="142" y="10" width="16" height="16"/><rect x="164" y="10" width="16" height="16"/><rect x="186" y="10" width="16" height="16"/><rect x="208" y="10" width="16" height="16"/><rect x="230" y="10" width="16" height="16"/><rect x="252" y="10" width="16" height="16"/><rect x="274" y="10" width="16" height="16"/><rect x="296" y="10" width="16" height="16"/><rect x="318" y="10" width="16" height="16"/><rect x="340" y="10" width="16" height="16"/></g>
+          </g>
+
+          <!-- the cache line pulled in with the current cell: 8 cells wide -->
+          <g fill="#bcd2f7" transform="translate(0,66)">
+            <rect x="10" y="10" width="16" height="16"/><rect x="32" y="10" width="16" height="16"/><rect x="54" y="10" width="16" height="16"/><rect x="76" y="10" width="16" height="16"/><rect x="98" y="10" width="16" height="16"/><rect x="120" y="10" width="16" height="16"/><rect x="142" y="10" width="16" height="16"/><rect x="164" y="10" width="16" height="16"/>
+          </g>
+          <!-- remaining cells on that row -->
+          <g fill="#edebe7" transform="translate(0,66)">
+            <rect x="186" y="10" width="16" height="16"/><rect x="208" y="10" width="16" height="16"/><rect x="230" y="10" width="16" height="16"/><rect x="252" y="10" width="16" height="16"/><rect x="274" y="10" width="16" height="16"/><rect x="296" y="10" width="16" height="16"/><rect x="318" y="10" width="16" height="16"/><rect x="340" y="10" width="16" height="16"/>
+          </g>
+          <!-- current cell -->
+          <rect x="54" y="76" width="16" height="16" fill="#2f6feb"/>
+
+          <!-- bracket marking the line -->
+          <g stroke="#7ea6ea" stroke-width="1.2" fill="none">
+            <path d="M10 100 L10 105 L180 105 L180 100"/>
+          </g>
+          <text x="95" y="120" text-anchor="middle" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; fill: #6b6560;">одна кэш-линия — 64 байта</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="legend">
+      <span><i style="background:#2f6feb"></i>текущее обращение</span>
+      <span><i style="background:#bcd2f7"></i>подтянуто вместе с ним</span>
+      <span><i style="background:#edebe7"></i>ещё не тронуто</span>
+    </div>
+
+    <p class="caption">Обход по строкам: подтянутая линия используется целиком —
+    восемь значений на один поход в память.</p>
+  </div>
+</main>
+</x-dc>
+</body>
+</html>

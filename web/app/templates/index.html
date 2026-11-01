@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="layout">
+  <div>
+    <h1>Разделы курса</h1>
+    <ol class="toc">
+      {% for section in sections %}
+      <li><a href="/section/{{ section.id }}">{{ section.title }}</a></li>
+      {% endfor %}
+    </ol>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,10 @@
+kind: ab
+lang: c
+function: matrix_sum
+cflags: ["-O3", "-fno-tree-vectorize"]
+# 2048 x 2048 int = 16 МБ. Разница между обходами зависит от кэша CPU.
+sizes: [2048]
+warmup: 2
+repeats: 11
+timeout_s: 60
+tolerance: 0

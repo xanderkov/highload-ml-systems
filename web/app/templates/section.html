@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ section.title }}{% endblock %}
+{% block content %}
+<div class="layout">
+  {% if outline %}
+  <nav class="section-toc" aria-label="Содержание раздела">
+    <div class="toc-head">
+      <span class="toc-section">{{ section.title }}</span>
+      <span class="toc-progress" hidden></span>
+    </div>
+    <div class="toc-bar" aria-hidden="true">
+      {% for part in outline %}<span data-part="{{ part.id }}"></span>{% endfor %}
+    </div>
+    <ol class="toc-parts">
+      {% for part in outline %}
+      <li data-part="{{ part.id }}"
+          {% if part.exercises %}data-exercises="{{ part.exercises | join(',') }}"{% endif %}>
+        <a href="#{{ part.id }}">
+          <span class="toc-num">{{ "%02d" | format(loop.index) }}</span>
+          <span class="toc-title">{{ part.title }}</span>
+          <span class="toc-mark" hidden>✓</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ol>
+  </nav>
+  {% endif %}
+
+  <article class="section" data-section="{{ section.id }}">
+    {{ body | safe }}
+  </article>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/vendor/ace/ace.js"></script>
+<script src="/static/vendor/uplot/uPlot.iife.min.js"></script>
+<script src="/static/vendor/katex/katex.min.js"></script>
+<script src="/static/vendor/katex/auto-render.min.js"></script>
+<script type="module" src="{{ asset_prefix }}/app.js"></script>
+{% endblock %}

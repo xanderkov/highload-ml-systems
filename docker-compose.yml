@@ -1,0 +1,31 @@
+services:
+  web:
+    build: ./web
+    ports:
+      - "${COURSE_PORT:-18080}:8000"
+    volumes:
+      - ./content:/app/content:ro
+    environment:
+      RUNNER_URL: http://runner:8000
+      CONTENT_ROOT: /app/content
+    networks: [front, back]
+    depends_on: [runner]
+
+  runner:
+    build: ./runner
+    volumes:
+      - ./content:/content:ro
+      - ./.runtime:/host-info:ro
+    environment:
+      CONTENT_ROOT: /content
+    networks: [back]
+    tmpfs:
+      # exec: compiled benchmark binaries are written here and executed
+      # directly from this mount — Docker's tmpfs defaults to noexec, which
+      # would make every job fail with PermissionError.
+      - /work:size=512m,mode=1777,exec
+
+networks:
+  front:
+  back:
+    internal: true

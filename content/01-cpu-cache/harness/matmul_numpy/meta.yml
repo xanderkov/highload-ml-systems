@@ -1,0 +1,10 @@
+kind: ab
+lang: python
+function: multiply
+cflags: ["-O3"]
+sizes: [384]
+warmup: 2
+repeats: 5
+timeout_s: 90
+memory_mb: 1024
+tolerance: 0
