@@ -157,3 +157,16 @@ def test_index_is_course_contents(course):
     positions = [response.text.index(f'href="/section/{sid}"') for _, sid, _, _ in COURSE]
     assert positions == sorted(positions)
     assert "Черновик" not in response.text
+
+
+def test_real_course_lists_naive_service_after_python_runtime():
+    import os
+    from pathlib import Path
+
+    root = Path(os.environ.get("CONTENT_ROOT", "/app/content"))
+    if not root.is_dir():
+        pytest.skip("контент не смонтирован")
+    html = TestClient(main.app).get("/").text
+    assert html.index('href="/section/python-runtime"') < html.index('href="/section/naive-service"')
+    page = TestClient(main.app).get("/section/naive-service")
+    assert page.status_code == 200
