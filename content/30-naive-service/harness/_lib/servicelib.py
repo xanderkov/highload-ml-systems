@@ -56,24 +56,42 @@ def split_cpus() -> tuple[set[int], set[int]]:
     return {cpus[0]}, set(cpus[1:])
 
 
-class ServiceURL(str):
-    """Базовый URL сервиса; .pids() — живые процессы его группы (мастер и воркеры)."""
+def _proc_table() -> dict[int, tuple[str, int, int]]:
+    """pid -> (состояние, ppid, время старта) для всех видимых процессов."""
+    table = {}
+    for name in os.listdir("/proc"):
+        if not name.isdigit():
+            continue
+        try:
+            stat = Path(f"/proc/{name}/stat").read_text()
+        except OSError:
+            continue
+        fields = stat.rsplit(")", 1)[1].split()
+        table[int(name)] = (fields[0], int(fields[1]), int(fields[19]))  # поля 3, 4, 22 в proc(5)
+    return table
 
-    pgid: int
+
+def _tree(root: int) -> dict[int, tuple[str, int, int]]:
+    """Процесс root и все его потомки (по ppid), с их записями из /proc."""
+    table = _proc_table()
+    found = {root} if root in table else set()
+    frontier = list(found)
+    while frontier:
+        parent = frontier.pop()
+        for pid, (_, ppid, _) in table.items():
+            if ppid == parent and pid not in found:
+                found.add(pid)
+                frontier.append(pid)
+    return {pid: table[pid] for pid in found}
+
+
+class ServiceURL(str):
+    """Базовый URL сервиса; .pids() — живые процессы сервиса (мастер uvicorn и воркеры)."""
+
+    pid: int  # мастер uvicorn (обёртка привязки к CPU делает в него exec)
 
     def pids(self) -> list[int]:
-        out = []
-        for name in os.listdir("/proc"):
-            if not name.isdigit():
-                continue
-            try:
-                stat = Path(f"/proc/{name}/stat").read_text()
-            except OSError:
-                continue
-            fields = stat.rsplit(")", 1)[1].split()
-            if fields[0] != "Z" and int(fields[2]) == self.pgid:
-                out.append(int(name))
-        return sorted(out)
+        return sorted(pid for pid, (state, _, _) in _tree(self.pid).items() if state != "Z")
 
 
 def _free_port() -> int:
@@ -105,16 +123,32 @@ def _healthy(url: str) -> bool:
         return False
 
 
-def _stop_group(proc: subprocess.Popen) -> None:
-    with contextlib.suppress(ProcessLookupError):
-        os.killpg(proc.pid, signal.SIGTERM)
+def _signal_alive(snapshot: dict[int, tuple[str, int, int]], sig: int) -> None:
+    """Шлёт sig процессам из снимка, если pid всё ещё тот же процесс (то же время старта)."""
+    table = _proc_table()
+    for pid, (_, _, started) in snapshot.items():
+        entry = table.get(pid)
+        if entry is not None and entry[0] != "Z" and entry[2] == started:
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(pid, sig)
+
+
+def _stop_tree(proc: subprocess.Popen) -> None:
+    """SIGTERM мастеру и воркерам, через TERM_GRACE_S — SIGKILL выжившим.
+
+    Сервис живёт в группе процессов харнесса (без своей сессии): если runner
+    убьёт задание целиком (killpg), uvicorn умрёт вместе с ним. Поэтому здесь
+    группу не трогаем, а обходим дерево потомков мастера. Снимок дерева
+    делается до SIGTERM: воркер, переживший мастера, уже не его потомок.
+    """
+    snapshot = _tree(proc.pid)
+    _signal_alive(snapshot, signal.SIGTERM)
     try:
         proc.wait(timeout=TERM_GRACE_S)
     except subprocess.TimeoutExpired:
         pass
-    # Добиваем всю группу: воркеры, пережившие мастера, тоже в ней.
-    with contextlib.suppress(ProcessLookupError):
-        os.killpg(proc.pid, signal.SIGKILL)
+    snapshot.update(_tree(proc.pid))
+    _signal_alive(snapshot, signal.SIGKILL)
     proc.wait()
 
 
@@ -145,9 +179,8 @@ def start_service(app_path: str, *, workers: int = 1, torch_threads: int | None 
         log_path = log.name
     try:
         with open(log_path, "wb") as log:
-            proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=log, env=child_env,
-                                    start_new_session=True)
-        url.pgid = proc.pid
+            proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=log, env=child_env)
+        url.pid = proc.pid
         try:
             deadline = time.monotonic() + HEALTH_TIMEOUT_S
             while not _healthy(url):
@@ -160,7 +193,7 @@ def start_service(app_path: str, *, workers: int = 1, torch_threads: int | None 
                 time.sleep(0.05)
             yield url
         finally:
-            _stop_group(proc)
+            _stop_tree(proc)
     finally:
         os.unlink(log_path)
 

@@ -140,6 +140,44 @@ def test_no_service_processes_left(fast_app):
     assert all(not pid_alive(p) for p in pids)
 
 
+_HARNESS = """
+import sys, time
+sys.path.insert(0, sys.argv[1])
+from servicelib import split_cpus, start_service
+load, service = split_cpus()
+with start_service(sys.argv[2], workers=2, cpus=service) as url:
+    print(url, flush=True)
+    time.sleep(60)
+"""
+
+
+def test_killed_harness_group_leaves_no_service(fast_app):
+    """Таймаут runner'а: вся группа харнесса получает SIGKILL, finally не исполняется."""
+    import signal
+    import subprocess
+
+    lib = os.path.join(_root, "30-naive-service", "harness", "_lib")
+    harness = subprocess.Popen([sys.executable, "-c", _HARNESS, lib, fast_app],
+                               stdout=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        url = harness.stdout.readline().strip()
+        assert url.startswith("http://"), url
+        pids = service_pids(url)
+        assert len(pids) >= 3  # мастер + 2 воркера
+    finally:
+        os.killpg(harness.pid, signal.SIGKILL)
+        harness.wait()
+    deadline = time.monotonic() + 5
+    while any(pid_alive(p) for p in pids) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    assert [p for p in pids if pid_alive(p)] == []
+
+
+def test_service_pids_are_master_and_workers(fast_app):
+    with start_service(fast_app, workers=2, cpus=SERVICE) as url:
+        assert url.pids() == service_pids(url)
+
+
 def test_cpu_seconds_of_busy_process():
     start = cpu_seconds([os.getpid()])
     deadline = time.process_time() + 0.3
