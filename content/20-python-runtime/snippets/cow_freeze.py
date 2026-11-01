@@ -1,11 +1,13 @@
 import gc
 
-N_KEYS = 1_000_000
 
+def build_data(records) -> dict[str, tuple[int, float]]:
+    """«Токенайзер»: словарь токен -> (id, score), как в SentencePiece.
 
-def build_data() -> dict[str, tuple[int, float]]:
-    """«Токенайзер»: словарь токен -> (id, score), как в SentencePiece."""
-    return {f"tok{i}": (i, -(i % 5000) / 100.0) for i in range(N_KEYS)}
+    records — записи (ключ, id, score) для ключей tok0, tok1, …; обойти их
+    можно сколько угодно раз, len(records) — их число.
+    """
+    return {key: (token_id, score) for key, token_id, score in records}
 
 
 def prepare(data) -> None:

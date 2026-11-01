@@ -44,7 +44,7 @@ import unit_b
 K = 32
 WARMUP_INFERENCES = 8
 MIN_CORES = 4
-# Задание рассчитано на машину до MAX_CORES ядер: на большей харнесс
+# Задание рассчитано на машину до MAX_CORES логических CPU: на большей харнесс
 # привязывается к первым MAX_CORES. Так число потоков (до 4 × cores)
 # остаётся в пределах лимита задач runner'а (sandbox.MAX_PROCESSES).
 MAX_CORES = 32
@@ -96,7 +96,7 @@ def validate(name: str, config, cores: int) -> tuple[int, int]:
     if threads < 1:
         fail(f"{prefix} число потоков должно быть не меньше 1")
     if processes * threads > MAX_THREADS_PER_CORE * cores:
-        fail(f"{prefix} всего потоков {processes * threads}, больше {MAX_THREADS_PER_CORE} × {cores} ядер")
+        fail(f"{prefix} всего потоков {processes * threads}, больше {MAX_THREADS_PER_CORE} × {cores} логических CPU")
     return processes, threads
 
 
@@ -150,7 +150,7 @@ def main() -> None:
         os.sched_setaffinity(0, cpus[:MAX_CORES])
     cores = len(os.sched_getaffinity(0))
     if cores < MIN_CORES:
-        print(f"на машине {cores} ядер, задание требует ≥ {MIN_CORES}", file=sys.stderr)
+        print(f"на машине {cores} логических CPU, задание требует ≥ {MIN_CORES}", file=sys.stderr)
         sys.exit(3)
     units = {"a": unit_a, "b": unit_b}
     configs = {name: validate(name, unit.config(cores), cores) for name, unit in units.items()}

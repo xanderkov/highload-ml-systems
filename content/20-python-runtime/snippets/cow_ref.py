@@ -2,8 +2,6 @@ import hashlib
 
 import numpy as np
 
-N_KEYS = 1_000_000
-
 
 def key_hash(key: str) -> int:
     """Стабильный 64-битный хэш строки.
@@ -15,15 +13,17 @@ def key_hash(key: str) -> int:
     return int.from_bytes(digest, "little", signed=True)
 
 
-def build_data():
+def build_data(records):
     """Те же записи (id, score), но в трёх numpy-массивах вместо миллиона объектов.
 
     Ключи не хранятся вовсе: только их хэши, отсортированные для двоичного
-    поиска. Каждый ключ живёт ровно одну итерацию цикла.
+    поиска. Записи обходим трижды, по разу на массив: каждый кортеж живёт
+    одну итерацию, и миллион объектов разом в памяти не оказывается.
     """
-    hashes = np.fromiter((key_hash(f"tok{i}") for i in range(N_KEYS)), dtype=np.int64, count=N_KEYS)
-    ids = np.arange(N_KEYS, dtype=np.int64)
-    scores = -(ids % 5000) / 100.0
+    n = len(records)
+    hashes = np.fromiter((key_hash(key) for key, _, _ in records), dtype=np.int64, count=n)
+    ids = np.fromiter((token_id for _, token_id, _ in records), dtype=np.int64, count=n)
+    scores = np.fromiter((score for _, _, score in records), dtype=np.float64, count=n)
     order = np.argsort(hashes, kind="stable")
     hashes, ids, scores = hashes[order], ids[order], scores[order]
     # Два ключа с одинаковым хэшем сделали бы поиск неоднозначным.

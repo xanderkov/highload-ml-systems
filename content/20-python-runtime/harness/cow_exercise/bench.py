@@ -3,7 +3,7 @@
 Протокол одного замера юнита (в отдельном процессе-«хозяине», чтобы память
 одного варианта не досталась следующему):
 
-1. хозяин мерит свой RSS, строит данные (`build_data`), мерит RSS снова —
+1. хозяин мерит свой RSS, строит данные (`build_data(records)`), мерит RSS снова —
    разница и есть «данные родителя»; затем вызывает `prepare(data)`;
 2. fork на WORKERS воркеров; барьер: все воркеры созданы;
 3. каждый воркер и хозяин мерят свой PSS («сразу после fork»), барьер;
@@ -15,6 +15,10 @@
 pss_growth_ratio = (Σ PSS после − Σ PSS сразу после fork) / (WORKERS × данные
 родителя), суммы по хозяину и воркерам: какую долю данных скопировал себе
 каждый воркер. Полная копия у каждого воркера даёт ≈ 1.
+
+Записи (id, score) псевдослучайные, с фиксированным seed — одинаковые для
+обоих юнитов. Будь они формулой от ключа, `lookup` мог бы вычислять их, не
+храня данных вовсе, и задание проходилось бы без урока.
 """
 
 import json
@@ -24,6 +28,8 @@ import signal
 import statistics
 import sys
 import time
+
+import numpy as np
 
 import forklib
 import memlib
@@ -39,6 +45,48 @@ MIN_DATA_MIB = 16.0
 # Контрольная сумма — точное целое меньше 2**52: представимо в float без
 # потерь, поэтому runner сравнивает его с tolerance 0.
 CHECK_MOD = 1 << 52
+SEED = 20261101
+CHUNK = 4096
+
+
+class Records:
+    """Записи «токенайзера»: кортежи (ключ, id, score) для ключей tok0, tok1, ….
+
+    Значения лежат в numpy-массивах вне Python-объектов, а кортежи создаются
+    заново на каждом обходе: всё, что build_data() сохранит, принадлежит его
+    данным и учитывается в «данных родителя». Обходить можно сколько угодно раз.
+    """
+
+    def __init__(self, seed: int) -> None:
+        rng = np.random.default_rng(seed)
+        # id — перестановка 0..N-1 (у токенов они уникальны), score — сотые
+        # доли в (-50, 0], как у log-вероятностей SentencePiece.
+        #
+        # Ни одного большого временного буфера: освобождение mmap-блока
+        # больше 128 КиБ поднимает порог mmap у glibc, и промежуточные таблицы
+        # растущего dict в build_data() оседали бы в heap и в RSS родителя
+        # (+15 МиБ «данных», которые воркеры не копируют). Поэтому перестановка
+        # на месте, деление в готовый массив, а куски для обхода — меньше порога.
+        self._ids = np.arange(N_KEYS)
+        rng.shuffle(self._ids)
+        self._hundredths = rng.integers(0, 5000, N_KEYS)
+        self._scores = np.empty(N_KEYS)
+        np.divide(self._hundredths, -100.0, out=self._scores)
+
+    def __len__(self) -> int:
+        return N_KEYS
+
+    def __iter__(self):
+        # Кусками: tolist() на весь массив разом держал бы лишний миллион
+        # объектов, пока идёт обход; CHUNK × 8 байт — меньше порога mmap.
+        for start in range(0, N_KEYS, CHUNK):
+            ids = self._ids[start:start + CHUNK].tolist()
+            scores = self._scores[start:start + CHUNK].tolist()
+            for offset, (token_id, score) in enumerate(zip(ids, scores)):
+                yield f"tok{start + offset}", token_id, score
+
+
+RECORDS = Records(SEED)
 
 
 def worker(index: int, unit, data, fds: dict) -> None:
@@ -65,7 +113,7 @@ def worker(index: int, unit, data, fds: dict) -> None:
 def host(unit) -> bytes:
     """Строит данные, форкает воркеров и возвращает итог одного замера (JSON)."""
     rss_before = memlib.rss_mib()
-    data = unit.build_data()
+    data = unit.build_data(RECORDS)
     data_mib = memlib.rss_mib() - rss_before
     if data_mib < MIN_DATA_MIB:
         print(

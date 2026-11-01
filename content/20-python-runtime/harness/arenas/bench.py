@@ -12,10 +12,10 @@ tracemalloc хранит запись о каждом блоке и сам ра�
 """
 
 import json
-import os
 import sys
 import tracemalloc
 
+import forklib
 import memlib
 
 import unit_a
@@ -44,26 +44,9 @@ def run(traced: bool) -> list[float]:
 
 
 def in_child(traced: bool) -> list[float]:
-    r, w = os.pipe()
-    pid = os.fork()
-    if pid == 0:
-        try:
-            os.close(r)
-            with os.fdopen(w, "w") as pipe:
-                pipe.write(json.dumps(run(traced)))
-            os._exit(0)
-        except BaseException:
-            import traceback
-
-            traceback.print_exc()
-            os._exit(1)
-    os.close(w)
-    with os.fdopen(r) as pipe:
-        data = pipe.read()
-    _, status = os.waitpid(pid, 0)
-    if status != 0:
-        sys.exit(f"child failed with status {status}")
-    return json.loads(data)
+    """Замер в отдельном процессе: память одного прогона не достаётся другому."""
+    name = "tracemalloc run" if traced else "RSS run"
+    return json.loads(forklib.run_in_child(lambda: json.dumps(run(traced)).encode(), name))
 
 
 def main() -> None:
