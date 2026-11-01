@@ -1,0 +1,9 @@
+kind: ab
+lang: python
+function: total
+sizes: [1]
+warmup: 1
+repeats: 5
+timeout_s: 60
+memory_mb: 2048
+tolerance: 1e-6

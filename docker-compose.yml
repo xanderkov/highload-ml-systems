@@ -13,6 +13,7 @@ services:
 
   runner:
     build: ./runner
+    mem_limit: 3g
     volumes:
       - ./content:/content:ro
       - ./.runtime:/host-info:ro

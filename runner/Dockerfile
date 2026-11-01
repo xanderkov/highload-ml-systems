@@ -3,6 +3,12 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends build-essential \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
+# CPU-only torch: the default PyPI x86_64 wheel drags in ~GBs of CUDA libs.
+RUN if [ "$(uname -m)" = "x86_64" ]; then \
+      pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "torch~=2.15"; \
+    else \
+      pip install --no-cache-dir "torch~=2.15"; \
+    fi
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
