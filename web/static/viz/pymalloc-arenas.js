@@ -22,7 +22,7 @@ export function mount(element, { params = {}, blockId = "pymalloc-arenas" } = {}
   const helpId = `${blockId}-help`;
   element.classList.add("viz", "pymalloc-arenas");
   element.innerHTML = `
-    <div class="block-head"><span>Арены pymalloc</span><span>${arenaCount} арены · схема: ${POOLS} пулов по ${BLOCKS} блоков</span></div>
+    <div class="block-head"><span>Арены pymalloc</span><span>${arenaCount} ${plural(arenaCount, "арена", "арены", "арен")} · схема: ${POOLS} пулов по ${BLOCKS} блоков</span></div>
     <div class="pm-stage" aria-describedby="${helpId}">
       <div class="pm-arenas"></div>
       <div class="pm-stats">
