@@ -89,9 +89,17 @@ def _tail(path: str) -> str:
         return f.read().decode(errors="replace")
 
 
+# Без прокси из окружения: сервис локальный, http_proxy не должен перехватывать /health.
+_DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+# Привязка к CPU в самом дочернем процессе перед exec: preexec_fn небезопасен,
+# если в родителе есть потоки (torch), а этот обёрточный интерпретатор однопоточен.
+_PIN_AND_EXEC = "import os, sys; os.sched_setaffinity(0, {int(c) for c in sys.argv[1].split(',')}); os.execv(sys.argv[2], sys.argv[2:])"
+
+
 def _healthy(url: str) -> bool:
     try:
-        with urllib.request.urlopen(url + "/health", timeout=1) as r:
+        with _DIRECT.open(url + "/health", timeout=1) as r:
             return r.status == 200
     except OSError:
         return False
@@ -129,17 +137,16 @@ def start_service(app_path: str, *, workers: int = 1, torch_threads: int | None 
             child_env[name] = str(torch_threads)
     if env:
         child_env.update(env)
-    cmd = [sys.executable, "-m", "uvicorn", f"{app.stem}:app", "--app-dir", str(app.parent),
+    cpu_list = ",".join(str(c) for c in sorted(cpus))
+    cmd = [sys.executable, "-c", _PIN_AND_EXEC, cpu_list, sys.executable, "-m", "uvicorn", f"{app.stem}:app", "--app-dir", str(app.parent),
            "--host", "127.0.0.1", "--port", str(port), "--workers", str(workers),
            "--log-level", "warning", "--no-access-log"]
-    cpus = set(cpus)
     with tempfile.NamedTemporaryFile(prefix="service-stderr-", delete=False) as log:
         log_path = log.name
     try:
         with open(log_path, "wb") as log:
             proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=log, env=child_env,
-                                    start_new_session=True,
-                                    preexec_fn=lambda: os.sched_setaffinity(0, cpus))
+                                    start_new_session=True)
         url.pgid = proc.pid
         try:
             deadline = time.monotonic() + HEALTH_TIMEOUT_S
@@ -218,31 +225,50 @@ async def _run(host: str, port: int, path: str, rps: float, duration_s: float,
     for _ in range(min(_INITIAL_CONNECTIONS, max(n, 1))):
         free.append(await asyncio.open_connection(host, port))
 
-    lags = [0.0] * n
+    lags: list = [None] * n
     done_at = [0.0] * n
     responses: list = [None] * n
 
-    async def exchange(i: int, body: bytes):
-        conn = free.pop() if free else await asyncio.open_connection(host, port)
+    async def send(conn, i: int, due: float, request: bytes):
         reader, writer = conn
-        reusable = False
+        if lags[i] is None:
+            lags[i] = time.perf_counter() - due  # фактическая отправка: тело готово, соединение есть
+        writer.write(request)
+        return await _read_response(reader)
+
+    async def exchange(i: int, due: float, body: bytes):
+        request = head + str(len(body)).encode() + b"\r\n\r\n" + body
+        pooled = bool(free)
+        conn = free.pop() if pooled else await asyncio.open_connection(host, port)
         try:
-            writer.write(head + str(len(body)).encode() + b"\r\n\r\n" + body)
-            status, data, reusable = await _read_response(reader)
-            return data if status == 200 else None
-        finally:
-            if reusable:
-                free.append(conn)
-            else:
-                writer.close()
+            status, data, reusable = await send(conn, i, due, request)
+        except (ConnectionError, asyncio.IncompleteReadError):
+            conn[1].close()
+            if not pooled:
+                raise
+            # Сервер мог закрыть простаивавшее keep-alive соединение: одна попытка на новом.
+            conn = await asyncio.open_connection(host, port)
+            try:
+                status, data, reusable = await send(conn, i, due, request)
+            except BaseException:
+                conn[1].close()
+                raise
+        except BaseException:
+            conn[1].close()
+            raise
+        if reusable:
+            free.append(conn)
+        else:
+            conn[1].close()
+        return data if status == 200 else None
 
     async def fire(i: int, due: float):
-        lags[i] = time.perf_counter() - due
-        conn_body = make_body(i)
         try:
-            responses[i] = await asyncio.wait_for(exchange(i, conn_body), timeout_s)
+            responses[i] = await asyncio.wait_for(exchange(i, due, make_body(i)), timeout_s)
         except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError, ValueError, IndexError):
             responses[i] = None
+        if lags[i] is None:  # не дошли до отправки
+            lags[i] = time.perf_counter() - due
         done_at[i] = time.perf_counter() - due
 
     loop = asyncio.get_running_loop()
@@ -269,7 +295,8 @@ def run_load(url: str, *, path: str = "/predict", rps: float, duration_s: float,
     """Открытая нагрузка: rps * duration_s POST-запросов по расписанию t0 + i / rps.
 
     Генератор работает в вызывающем потоке, на время замера привязанном к cpus.
-    make_body(i) вызывается в момент отправки — он должен быть дешёвым (заготовьте тела заранее).
+    make_body(i) вызывается в момент отправки — он должен быть дешёвым (заготовьте тела заранее):
+    lag меряется прямо перед записью в сокет и включает make_body и ожидание соединения.
     Бросает LoadGeneratorLagging, если p99 отставания отправки от плана > 5 мс.
     """
     host_port = url.split("://", 1)[1].rstrip("/")

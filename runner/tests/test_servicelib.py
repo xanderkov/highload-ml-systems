@@ -20,10 +20,6 @@ from servicelib import (  # noqa: E402
 
 APPS = Path(__file__).parent / "fixtures" / "apps"
 LOAD, SERVICE = split_cpus()
-# Сырой asyncio-генератор на 1 CPU держит расписание до ~16000 RPS против мгновенного
-# сервиса (замер при реализации; спайк задачи 0 видел срыв уже на ~6000, но против
-# другого сервиса). ×3 от потолка — гарантированный срыв.
-RPS_BEYOND_GENERATOR = 60000
 OCTET = "application/octet-stream"
 
 
@@ -153,5 +149,16 @@ def test_cpu_seconds_of_busy_process():
 
 
 def test_lagging_generator_is_reported(fast_app):
+    def slow_body(i):  # 2 мс на тело при 1000 RPS: генератор заведомо не успевает
+        time.sleep(0.002)
+        return b"x"
+
     with start_service(fast_app, cpus=SERVICE) as url, pytest.raises(LoadGeneratorLagging):
-        run_load(url, rps=RPS_BEYOND_GENERATOR, duration_s=1, make_body=lambda i: b"x", content_type=OCTET, cpus=LOAD)
+        run_load(url, rps=1000, duration_s=0.5, make_body=slow_body, content_type=OCTET, cpus=LOAD)
+
+
+def test_health_check_ignores_proxy_env(fast_app, monkeypatch):
+    monkeypatch.setenv("http_proxy", "http://127.0.0.1:9")
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:9")
+    with start_service(fast_app, cpus=SERVICE) as url:
+        assert url.startswith("http://127.0.0.1:")

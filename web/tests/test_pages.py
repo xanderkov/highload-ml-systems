@@ -160,10 +160,7 @@ def test_index_is_course_contents(course):
 
 
 def test_real_course_lists_naive_service_after_python_runtime():
-    import os
-    from pathlib import Path
-
-    root = Path(os.environ.get("CONTENT_ROOT", "/app/content"))
+    root = main.content_root()
     if not root.is_dir():
         pytest.skip("контент не смонтирован")
     html = TestClient(main.app).get("/").text
