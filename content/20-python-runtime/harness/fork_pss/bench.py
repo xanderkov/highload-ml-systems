@@ -15,8 +15,10 @@ ROUNDS = 20
 SAMPLE_S = 0.2
 
 
-def run_child(wfd: int, data, t0: float) -> None:
+def run_child(wfd: int, data, t0: float, other_fds) -> None:
     """Воркер: поток шлёт свой PSS в pipe, основной поток читает словарь."""
+    for fd in other_fds:
+        os.close(fd)
     done = threading.Event()
 
     def sample() -> None:
@@ -48,7 +50,7 @@ def main() -> None:
         if pid == 0:
             try:
                 os.close(r)
-                run_child(w, data, t0)
+                run_child(w, data, t0, list(pipes))
                 os._exit(0)
             except BaseException:
                 traceback.print_exc()
@@ -80,9 +82,16 @@ def main() -> None:
                 points[i].append({"x": float(x), "y": float(y)})
 
     failed = False
-    for pid in pids:
+    for i, pid in enumerate(pids):
         _, status = os.waitpid(pid, 0)
-        failed = failed or not (os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0)
+        if not (os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0):
+            failed = True
+            how = (
+                f"exit code {os.WEXITSTATUS(status)}"
+                if os.WIFEXITED(status)
+                else f"signal {os.WTERMSIG(status)}"
+            )
+            print(f"worker {i + 1} (pid {pid}) failed: {how}", file=sys.stderr)
     if failed:
         sys.exit(1)
 

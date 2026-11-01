@@ -1,4 +1,6 @@
+import os
 import resource
+import signal
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,27 +36,39 @@ def run(
     memory_mb: int,
     env: dict[str, str] | None = None,
 ) -> ProcResult:
-    try:
-        completed = subprocess.run(
-            cmd,
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=timeout_s,
-            preexec_fn=_limits(memory_mb),
-            env=env,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        return ProcResult(
-            returncode=-1,
-            stdout=exc.stdout.decode() if isinstance(exc.stdout, bytes) else (exc.stdout or ""),
-            stderr=exc.stderr.decode() if isinstance(exc.stderr, bytes) else (exc.stderr or ""),
-            timed_out=True,
-        )
-    return ProcResult(
-        returncode=completed.returncode,
-        stdout=completed.stdout,
-        stderr=completed.stderr,
-        timed_out=False,
+    # Своя сессия: процесс — лидер группы, и в конце задания убиваем всю группу,
+    # чтобы форкнутые воркеры не пережили ни таймаут, ни падение родителя.
+    proc = subprocess.Popen(
+        cmd,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        preexec_fn=_limits(memory_mb),
+        env=env,
+        start_new_session=True,
     )
+    timed_out = False
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        # Если сам процесс уже завершился, а таймаут вышел из-за потомка,
+        # держащего pipe, это не таймаут задания: просто добираем вывод.
+        timed_out = proc.poll() is None
+        _kill_group(proc.pid)
+        stdout, stderr = proc.communicate()
+    finally:
+        _kill_group(proc.pid)
+    return ProcResult(
+        returncode=-1 if timed_out else proc.returncode,
+        stdout=stdout or "",
+        stderr=stderr or "",
+        timed_out=timed_out,
+    )
+
+
+def _kill_group(pgid: int) -> None:
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass

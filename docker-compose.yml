@@ -14,6 +14,7 @@ services:
   runner:
     build: ./runner
     mem_limit: 3g
+    init: true  # reap убитых потомков заданий (иначе остаются zombie)
     volumes:
       - ./content:/content:ro
       - ./.runtime:/host-info:ro

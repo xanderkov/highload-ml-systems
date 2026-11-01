@@ -64,3 +64,47 @@ def test_run_does_not_execute_as_root(tmp_path):
     )
 
     assert result.stdout.strip() != "0"
+
+
+def _gone(pid):
+    import os
+    import time
+
+    for _ in range(50):
+        try:
+            os.kill(pid, 0)
+            with open(f"/proc/{pid}/stat") as stat:
+                if stat.read().rsplit(")", 1)[1].split()[0] == "Z":
+                    return True  # убит, ждёт только reap от init контейнера
+        except (ProcessLookupError, FileNotFoundError):
+            return True
+        time.sleep(0.1)
+    return False
+
+
+FORKER = (
+    "import os, sys, time\n"
+    "pid = os.fork()\n"
+    "if pid == 0:\n"
+    "    time.sleep(1000)\n"
+    "    os._exit(0)\n"
+    "print(pid, flush=True)\n"
+    "{tail}"
+)
+
+
+def test_timeout_kills_forked_children(tmp_path):
+    result = run(
+        [sys.executable, "-c", FORKER.format(tail="time.sleep(1000)\n")], tmp_path, timeout_s=2, memory_mb=512
+    )
+
+    assert result.timed_out is True
+    assert _gone(int(result.stdout.split()[0]))
+
+
+def test_background_grandchild_killed_after_normal_exit(tmp_path):
+    result = run([sys.executable, "-c", FORKER.format(tail="")], tmp_path, timeout_s=2, memory_mb=512)
+
+    assert result.timed_out is False
+    assert result.returncode == 0
+    assert _gone(int(result.stdout.split()[0]))
