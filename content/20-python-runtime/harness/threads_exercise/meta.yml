@@ -4,7 +4,7 @@ lang: python
 threads: auto
 sizes: [1]
 warmup: 0
-repeats: 5
-timeout_s: 180
+repeats: 3
+timeout_s: 90
 memory_mb: 2048
 tolerance: 0

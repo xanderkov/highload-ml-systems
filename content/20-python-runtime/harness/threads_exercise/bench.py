@@ -1,14 +1,22 @@
 """Задание 2: подобрать число процессов и потоков torch в каждом.
 
-`config(cores)` юнита возвращает (процессы, потоки). Один замер:
+`config(cores)` юнита возвращает (процессы, потоки); cores — число
+логических CPU, доступных процессу (`len(os.sched_getaffinity(0))`).
 
-1. запускаем процессы через spawn (как воркеры сервиса: чистый
+Для каждого юнита пул процессов запускается один раз:
+
+1. процессы стартуют через spawn (как воркеры сервиса: чистый
    интерпретатор, свой torch в каждом);
 2. каждый процесс импортирует torch, ставит `torch.set_num_threads`,
-   строит модель, готовит свои входы и прогревается — всё это до общего
+   строит модель, готовит свои входы и прогревается — всё это до первого
    старта и в замер не входит;
-3. по сигналу «старт» процессы делят между собой K входов (батчи по 1);
-   замер — от самого раннего старта до самого позднего финиша.
+3. на каждый замер — сигнал «старт»: процессы делят между собой K входов
+   (батчи по 1); замер — от самого раннего старта до самого позднего
+   финиша.
+
+Пул один на все замеры юнита, а не на каждый: запуск процессов с torch
+стоит секунды. Поэтому юниты меряются не вперемешку, а друг за другом —
+разница между ними на порядки больше дрейфа машины.
 
 check — число обработанных входов: конфигурация, которая теряет часть
 работы, не зачитывается.
@@ -31,23 +39,25 @@ import unit_a
 import unit_b
 
 # Стартовая конфигурация с oversubscription тратит ~90 мс на вход (на 16
-# ядрах), поэтому K небольшое: 5 повторов стартового кода — около минуты.
-K = 128
+# CPU), поэтому K небольшое: замер «стартовый код против стартового»
+# укладывается примерно в 20 секунд.
+K = 32
 WARMUP_INFERENCES = 8
 MIN_CORES = 4
 # Задание рассчитано на машину до MAX_CORES ядер: на большей харнесс
 # привязывается к первым MAX_CORES. Так число потоков (до 4 × cores)
 # остаётся в пределах лимита задач runner'а (sandbox.MAX_PROCESSES).
 MAX_CORES = 32
-# Верхние границы конфигурации. Больше 16 процессов не нужно, а каждый
-# процесс с torch — это ~200 МиБ памяти контейнера. Всего потоков не больше
-# 4 × cores: ровно столько у стартовой конфигурации.
-MAX_PROCESSES = 16
+# Верхние границы конфигурации. Процесс с torch и моделью занимает ~150 МиБ:
+# пик контейнера для 16 процессов — 2,4 ГиБ из mem_limit 3 ГиБ (без запаса),
+# для 8 — 1,2 ГиБ. Всего потоков не больше 4 × cores: ровно столько у
+# стартовой конфигурации.
+MAX_PROCESSES = 8
 MAX_THREADS_PER_CORE = 4
 STAGE_TIMEOUT_S = 60
 
 
-def worker(threads: int, count: int, ready, go, results) -> None:
+def worker(threads: int, count: int, ready, gos, results) -> None:
     import torch
 
     import tinymodel
@@ -59,14 +69,15 @@ def worker(threads: int, count: int, ready, go, results) -> None:
         for _ in range(WARMUP_INFERENCES):
             model(inputs[0])
         ready.put(os.getpid())
-        go.wait()
-        # CLOCK_MONOTONIC общий для всех процессов машины: отметки разных
-        # воркеров сравнимы между собой.
-        t0 = time.monotonic()
-        for x in inputs:
-            model(x)
-        t1 = time.monotonic()
-    results.put((len(inputs), t0, t1))
+        for go in gos:
+            go.wait()
+            # CLOCK_MONOTONIC общий для всех процессов машины: отметки разных
+            # воркеров сравнимы между собой.
+            t0 = time.monotonic()
+            for x in inputs:
+                model(x)
+            t1 = time.monotonic()
+            results.put((len(inputs), t0, t1))
 
 
 def fail(message: str):
@@ -108,25 +119,29 @@ def gather(source, procs, n: int, stage: str) -> list:
     return items
 
 
-def measure(processes: int, threads: int) -> tuple[float, int]:
-    """Время (мс) на K входов при данной конфигурации и число обработанных."""
+def measure(processes: int, threads: int, trials: int) -> list[tuple[float, int]]:
+    """Один пул, trials замеров: время (мс) на K входов и число обработанных."""
     ctx = multiprocessing.get_context("spawn")
-    ready, results, go = ctx.Queue(), ctx.Queue(), ctx.Event()
+    ready, results = ctx.Queue(), ctx.Queue()
+    gos = [ctx.Event() for _ in range(trials)]
     counts = [K // processes + (1 if i < K % processes else 0) for i in range(processes)]
-    procs = [ctx.Process(target=worker, args=(threads, c, ready, go, results)) for c in counts]
+    procs = [ctx.Process(target=worker, args=(threads, c, ready, gos, results)) for c in counts]
     for proc in procs:
         proc.start()
     gather(ready, procs, processes, "воркеры не дошли до старта")
-    go.set()
-    records = gather(results, procs, processes, "воркеры не закончили работу")
+    out = []
+    for go in gos:
+        go.set()
+        records = gather(results, procs, processes, "воркеры не закончили работу")
+        start = min(r[1] for r in records)
+        stop = max(r[2] for r in records)
+        out.append(((stop - start) * 1000, sum(r[0] for r in records)))
     for proc in procs:
         proc.join()
     bad = [(i + 1, p.exitcode) for i, p in enumerate(procs) if p.exitcode != 0]
     if bad:
         fail(f"воркеры (номер, код выхода) завершились с ошибкой: {bad}")
-    start = min(r[1] for r in records)
-    stop = max(r[2] for r in records)
-    return (stop - start) * 1000, sum(r[0] for r in records)
+    return out
 
 
 def main() -> None:
@@ -139,18 +154,19 @@ def main() -> None:
         sys.exit(3)
     units = {"a": unit_a, "b": unit_b}
     configs = {name: validate(name, unit.config(cores), cores) for name, unit in units.items()}
-    samples = []
+    warmup = int(os.environ["BENCH_WARMUP"])
+    trials = warmup + int(os.environ["BENCH_REPEATS"])
+    times = {}
     checks = {}
-    for trial in range(-int(os.environ["BENCH_WARMUP"]), int(os.environ["BENCH_REPEATS"])):
-        sample = {}
-        for offset in range(2):
-            name = "ab"[(trial + offset) % 2]
-            ms, done = measure(*configs[name])
-            print(f"unit {name}: {configs[name][0]} proc × {configs[name][1]} thr: {ms:.0f} ms", file=sys.stderr)
-            sample[name] = ms
-            checks[name] = float(done)
-        if trial >= 0:
-            samples.append(sample)
+    for name, (processes, threads) in configs.items():
+        runs = measure(processes, threads, trials)[warmup:]
+        for ms, _ in runs:
+            print(f"unit {name}: {processes} proc × {threads} thr: {ms:.0f} ms", file=sys.stderr)
+        if len({done for _, done in runs}) != 1:
+            fail(f"unit {name}: число обработанных входов менялось от замера к замеру")
+        times[name] = [ms for ms, _ in runs]
+        checks[name] = float(runs[0][1])
+    samples = [{"a": a, "b": b} for a, b in zip(times["a"], times["b"])]
     print(json.dumps({"samples": samples, "check": checks}))
 
 
