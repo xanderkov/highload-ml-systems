@@ -4,8 +4,8 @@ import select
 import sys
 import threading
 import time
-import traceback
 
+import forklib
 import memlib
 
 import unit_a
@@ -53,7 +53,7 @@ def main() -> None:
                 run_child(w, data, t0, list(pipes))
                 os._exit(0)
             except BaseException:
-                traceback.print_exc()
+                forklib.report_exception(f"worker {i + 1}")
                 os._exit(1)
         os.close(w)
         pids.append(pid)
@@ -86,12 +86,7 @@ def main() -> None:
         _, status = os.waitpid(pid, 0)
         if not (os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0):
             failed = True
-            how = (
-                f"exit code {os.WEXITSTATUS(status)}"
-                if os.WIFEXITED(status)
-                else f"signal {os.WTERMSIG(status)}"
-            )
-            print(f"worker {i + 1} (pid {pid}) failed: {how}", file=sys.stderr)
+            print(f"worker {i + 1} (pid {pid}) failed: {forklib.describe(status)}", file=sys.stderr)
     if failed:
         sys.exit(1)
 

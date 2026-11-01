@@ -5,4 +5,4 @@ warmup: 0
 repeats: 3
 timeout_s: 120
 memory_mb: 2048
-tolerance: 1e-9
+tolerance: 0

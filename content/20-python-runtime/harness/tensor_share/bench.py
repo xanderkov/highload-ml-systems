@@ -15,8 +15,8 @@ import json
 import os
 import sys
 import time
-import traceback
 
+import forklib
 import memlib
 
 import unit_a
@@ -37,22 +37,15 @@ def worker(wfd: int, read, data, t0: float, exit_r: int) -> None:
         time.sleep(PAUSE_S)
     # Барьер: выходим, только когда дочитали все. Ранний выход одного
     # воркера поднял бы PSS остальных: общих страниц делят меньше процессов.
-    while os.read(exit_r, 1):
-        pass
+    forklib.wait_eof(exit_r)
 
 
-def describe(status: int) -> str:
-    if os.WIFEXITED(status):
-        return f"exit code {os.WEXITSTATUS(status)}"
-    return f"signal {os.WTERMSIG(status)}"
-
-
-def group(name: str, build, read, out: int) -> None:
-    """Родитель группы: строит данные, форкает воркеров, пишет точки в out."""
+def group(name: str, build, read) -> bytes:
+    """Родитель группы: строит данные, форкает воркеров, возвращает точки."""
     rss_before = memlib.rss_mib()
     data = build()
     data_mib = memlib.rss_mib() - rss_before
-    os.write(out, f"data {data_mib:.2f}\n".encode())
+    out = [f"data {data_mib:.2f}"]
     exit_r, exit_w = os.pipe()
     t0 = time.monotonic()
     pids = []
@@ -69,7 +62,7 @@ def group(name: str, build, read, out: int) -> None:
                 worker(w, read, data, t0, exit_r)
                 os._exit(0)
             except BaseException:
-                os.write(2, f"{name} worker {index + 1}: {traceback.format_exc()}".encode())
+                forklib.report_exception(f"{name} worker {index + 1}")
                 os._exit(1)
         os.close(w)
         pids.append(pid)
@@ -81,44 +74,24 @@ def group(name: str, build, read, out: int) -> None:
         buf = b""
         while buf.count(b"\n") < ROUNDS + 1 and (chunk := os.read(r, 65536)):
             buf += chunk
-        for line in buf.decode().splitlines():
-            os.write(out, f"{index} {line}\n".encode())
+        out.extend(f"{index} {line}" for line in buf.decode().splitlines())
     os.close(exit_w)
     for r in readers:
         os.close(r)
     for index, pid in enumerate(pids):
         _, status = os.waitpid(pid, 0)
         if not (os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0):
-            print(f"{name} worker {index + 1} (pid {pid}) failed: {describe(status)}", file=sys.stderr)
+            print(f"{name} worker {index + 1} (pid {pid}) failed: {forklib.describe(status)}", file=sys.stderr)
             sys.stderr.flush()
             os._exit(1)
+    return "\n".join(out).encode()
 
 
 def run_group(name: str, build, read) -> tuple[float, list[dict]]:
-    sys.stdout.flush()
-    sys.stderr.flush()
-    r, w = os.pipe()
-    pid = os.fork()
-    if pid == 0:
-        try:
-            os.close(r)
-            group(name, build, read, w)
-            os._exit(0)
-        except BaseException:
-            os.write(2, f"{name} parent: {traceback.format_exc()}".encode())
-            os._exit(1)
-    os.close(w)
-    chunks = []
-    while chunk := os.read(r, 65536):
-        chunks.append(chunk)
-    os.close(r)
-    _, status = os.waitpid(pid, 0)
-    if not (os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0):
-        print(f"{name} parent failed: {describe(status)}", file=sys.stderr)
-        sys.exit(1)
+    output = forklib.run_in_child(lambda: group(name, build, read), f"{name} parent")
     data_mib = 0.0
     points = [[] for _ in range(WORKERS)]
-    for line in b"".join(chunks).decode().splitlines():
+    for line in output.decode().splitlines():
         head, *rest = line.split()
         if head == "data":
             data_mib = float(rest[0])
@@ -135,5 +108,6 @@ def main() -> None:
     tensor_mib, tensor_lines = run_group("tensor", lambda: unit_a.build_tensor(n_bytes), unit_a.read_tensor)
     print(f"dict {dict_mib:.0f} MiB, tensor {tensor_mib:.0f} MiB", file=sys.stderr)
     print(json.dumps({"lines": dict_lines + tensor_lines}))
+
 
 main()

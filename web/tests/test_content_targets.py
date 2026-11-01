@@ -146,3 +146,18 @@ def test_cow_worker_exception_is_reported():
     code = read_snippet("cow_starter.py").replace("return data[key]", "raise RuntimeError('boom')")
     result = execute_exercise("python-runtime", "cow-exercise", code)
     assert result["status"] == "runtime_error" and "boom" in result["log"], result
+
+
+@pytest.mark.content
+def test_cow_misaligned_scores_are_incorrect():
+    """Отсортировали хэши и id, а score забыли: контрольная сумма это ловит."""
+    reference = read_snippet("cow_ref.py")
+    code = reference.replace(
+        "hashes, ids, scores = hashes[order], ids[order], scores[order]",
+        "hashes, ids = hashes[order], ids[order]",
+    )
+    assert code != reference
+    result = execute_exercise("python-runtime", "cow-exercise", code)
+    assert result["status"] == "ok", result
+    assert result["correct"] is False, result
+    assert result["passed"] is False, result

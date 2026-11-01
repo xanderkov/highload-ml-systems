@@ -6,13 +6,15 @@
 1. хозяин мерит свой RSS, строит данные (`build_data`), мерит RSS снова —
    разница и есть «данные родителя»; затем вызывает `prepare(data)`;
 2. fork на WORKERS воркеров; барьер: все воркеры созданы;
-3. каждый воркер мерит свой PSS («сразу после fork»), барьер;
+3. каждый воркер и хозяин мерят свой PSS («сразу после fork»), барьер;
 4. каждый воркер собирает ключи заново и вызывает `lookup` на каждом,
-   мерит время прохода и PSS после; барьер, и только потом воркеры выходят —
-   иначе ранний выход одного менял бы доли PSS остальных.
+   мерит время прохода и PSS после, хозяин — свой PSS; барьер, и только
+   потом воркеры выходят — иначе ранний выход одного менял бы доли PSS
+   остальных.
 
 pss_growth_ratio = (Σ PSS после − Σ PSS сразу после fork) / (WORKERS × данные
-родителя): какую долю данных скопировал себе каждый воркер.
+родителя), суммы по хозяину и воркерам: какую долю данных скопировал себе
+каждый воркер. Полная копия у каждого воркера даёт ≈ 1.
 """
 
 import json
@@ -22,8 +24,8 @@ import signal
 import statistics
 import sys
 import time
-import traceback
 
+import forklib
 import memlib
 
 import unit_a
@@ -31,47 +33,50 @@ import unit_b
 
 WORKERS = 4
 N_KEYS = 1_000_000
-
-
-def wait_eof(fd: int) -> None:
-    """Барьер: ждём, пока хозяин закроет пишущий конец pipe."""
-    while os.read(fd, 1):
-        pass
+# Меньше этого прирост RSS — уже шум аллокатора, а не данные: доля от него
+# ничего не значит.
+MIN_DATA_MIB = 16.0
+# Контрольная сумма — точное целое меньше 2**52: представимо в float без
+# потерь, поэтому runner сравнивает его с tolerance 0.
+CHECK_MOD = 1 << 52
 
 
 def worker(index: int, unit, data, fds: dict) -> None:
     for fd in (fds["start_w"], fds["go_w"], fds["exit_w"], fds["res_r"]):
         os.close(fd)
     res = fds["res_w"]
-    wait_eof(fds["start_r"])
+    forklib.wait_eof(fds["start_r"])
     os.write(res, f"{index} start {memlib.pss_mib():.3f}\n".encode())
-    wait_eof(fds["go_r"])
-    acc_id = 0
-    acc_score = 0.0
+    forklib.wait_eof(fds["go_r"])
+    acc = 0
     t0 = time.perf_counter()
     for i in range(N_KEYS):
         # Ключ — новая строка, собранная в воркере: в общих страницах
         # меняются только счётчики ссылок того, что хранит сама структура.
         token_id, score = unit.lookup(data, f"tok{i}")
-        acc_id += token_id * (i % 997 + 1)
-        acc_score += score
+        # Порядок ключей фиксирован, а сумма зависит от порядка и от обоих
+        # полей: перепутанные score или сдвинутые id её меняют.
+        acc = (acc * 1_000_003 + token_id * 100_003 + round(score * 100)) % CHECK_MOD
     ms = (time.perf_counter() - t0) * 1000
-    check = acc_id + acc_score
-    os.write(res, f"{index} done {memlib.pss_mib():.3f} {ms:.3f} {check!r}\n".encode())
-    wait_eof(fds["exit_r"])
+    os.write(res, f"{index} done {memlib.pss_mib():.3f} {ms:.3f} {acc}\n".encode())
+    forklib.wait_eof(fds["exit_r"])
 
 
-def describe(status: int) -> str:
-    if os.WIFEXITED(status):
-        return f"exit code {os.WEXITSTATUS(status)}"
-    return f"signal {os.WTERMSIG(status)}"
-
-
-def host(unit) -> dict:
-    """Строит данные, форкает воркеров и возвращает итог одного замера."""
+def host(unit) -> bytes:
+    """Строит данные, форкает воркеров и возвращает итог одного замера (JSON)."""
     rss_before = memlib.rss_mib()
     data = unit.build_data()
     data_mib = memlib.rss_mib() - rss_before
+    if data_mib < MIN_DATA_MIB:
+        print(
+            f"build_data() увеличил RSS родителя всего на {data_mib:.1f} МиБ "
+            f"(нужно хотя бы {MIN_DATA_MIB:.0f}): долю скопированных данных "
+            "не от чего считать. Данные должны строиться в build_data(), "
+            "а не при импорте модуля.",
+            file=sys.stderr,
+        )
+        sys.stderr.flush()
+        os._exit(1)
     unit.prepare(data)
 
     fds = {}
@@ -88,8 +93,7 @@ def host(unit) -> dict:
                 worker(index, unit, data, fds)
                 os._exit(0)
             except BaseException:
-                # Одной записью: трассировки четырёх воркеров не перемешаются.
-                os.write(2, f"worker {index + 1}: {traceback.format_exc()}".encode())
+                forklib.report_exception(f"worker {index + 1}")
                 os._exit(1)
         pids.append(pid)
     for name in ("start_r", "go_r", "exit_r", "res_w"):
@@ -113,7 +117,7 @@ def host(unit) -> dict:
                 # любой выход здесь — сбой (исключение, сигнал, OOM).
                 done, status = os.waitpid(pid, os.WNOHANG)
                 if done:
-                    print(f"worker {index + 1} (pid {pid}) failed: {describe(status)}", file=sys.stderr)
+                    print(f"worker {index + 1} (pid {pid}) failed: {forklib.describe(status)}", file=sys.stderr)
                     for other in pids:
                         if other != pid:
                             try:
@@ -125,59 +129,39 @@ def host(unit) -> dict:
 
     os.close(fds["start_w"])
     collect("start")
+    # Воркеры стоят на барьере go: хозяин мерит себя в том же состоянии.
+    host_start = memlib.pss_mib()
     os.close(fds["go_w"])
     collect("done")
+    host_done = memlib.pss_mib()
     os.close(fds["exit_w"])
     for index, pid in enumerate(pids):
         _, status = os.waitpid(pid, 0)
         if not (os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0):
-            print(f"worker {index + 1} (pid {pid}) failed: {describe(status)}", file=sys.stderr)
+            print(f"worker {index + 1} (pid {pid}) failed: {forklib.describe(status)}", file=sys.stderr)
             os._exit(1)
 
-    pss_start = sum(float(records["start"][i][0]) for i in range(WORKERS))
-    pss_done = sum(float(records["done"][i][0]) for i in range(WORKERS))
+    pss_start = host_start + sum(float(records["start"][i][0]) for i in range(WORKERS))
+    pss_done = host_done + sum(float(records["done"][i][0]) for i in range(WORKERS))
     checks = {records["done"][i][2] for i in range(WORKERS)}
     if len(checks) != 1:
         print(f"воркеры вернули разные контрольные суммы: {sorted(checks)}", file=sys.stderr)
         os._exit(1)
-    return {
+    return json.dumps({
         "ms": max(float(records["done"][i][1]) for i in range(WORKERS)),
-        "check": float(checks.pop()),
+        "check": int(checks.pop()),
         "data_mib": data_mib,
         "growth_mib": pss_done - pss_start,
         "ratio": (pss_done - pss_start) / (WORKERS * data_mib),
-    }
+    }).encode()
 
 
 def measure(name: str, unit) -> dict:
     """Один замер юнита в отдельном процессе-хозяине."""
-    sys.stdout.flush()
-    sys.stderr.flush()
-    r, w = os.pipe()
-    pid = os.fork()
-    if pid == 0:
-        try:
-            os.close(r)
-            result = host(unit)
-            os.write(w, json.dumps(result).encode())
-            os._exit(0)
-        except BaseException:
-            traceback.print_exc()
-            sys.stderr.flush()
-            os._exit(1)
-    os.close(w)
-    chunks = []
-    while chunk := os.read(r, 65536):
-        chunks.append(chunk)
-    os.close(r)
-    _, status = os.waitpid(pid, 0)
-    if not (os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0):
-        print(f"unit {name}: parent process failed: {describe(status)}", file=sys.stderr)
-        sys.exit(1)
-    result = json.loads(b"".join(chunks))
+    result = json.loads(forklib.run_in_child(lambda: host(unit), f"unit {name}: parent process"))
     print(
         f"unit {name}: data {result['data_mib']:.1f} MiB, "
-        f"workers grew {result['growth_mib']:.1f} MiB, ratio {result['ratio']:.3f}, "
+        f"processes grew {result['growth_mib']:.1f} MiB, ratio {result['ratio']:.3f}, "
         f"pass {result['ms']:.0f} ms",
         file=sys.stderr,
     )
@@ -195,7 +179,7 @@ def main() -> None:
             name = "ab"[(trial + offset) % 2]
             result = measure(name, units[name])
             sample[name] = result["ms"]
-            checks[name] = result["check"]
+            checks[name] = float(result["check"])
             if trial >= 0:
                 ratios[name].append(result["ratio"])
         if trial >= 0:
