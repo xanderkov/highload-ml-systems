@@ -248,6 +248,11 @@ li { margin: 0.4em 0; }
 }
 .pager-title { font-size: 14px; color: var(--color-bright); }
 
+@media (max-width: 600px) {
+  .section-pager { grid-template-columns: 1fr; }
+  .section-pager .pager-next { grid-column: 1; }
+}
+
 .toc .toc-num { margin-right: 10px; }
 
 /* ── Боковое оглавление раздела ──────────────────────────────────────── */
