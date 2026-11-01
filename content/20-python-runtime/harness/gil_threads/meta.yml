@@ -1,0 +1,7 @@
+kind: series
+lang: python
+# auto: OMP_NUM_THREADS не задан, потоками torch управляет сама нагрузка
+# (torch.set_num_threads(1) в каждом потоке); BLAS numpy закрепляет bench.py.
+threads: auto
+timeout_s: 90
+memory_mb: 2048

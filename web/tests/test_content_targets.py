@@ -65,6 +65,16 @@ def read_snippet(name, section_dir="20-python-runtime"):
     return (CONTENT_ROOT / section_dir / "snippets" / name).read_text(encoding="utf-8")
 
 
+def skip_if_not_enough_cores(result):
+    """Задание на параллелизм на машине с малым числом ядер не проверяется.
+
+    Харнесс сам сообщает об этом (exit 3, «задание требует ≥ N»): это не
+    поломка материала, а неподходящая машина.
+    """
+    if result.get("status") == "runtime_error" and "задание требует ≥ 4" in result.get("log", ""):
+        pytest.skip(result["log"].strip())
+
+
 def harness_meta(section, block):
     path = section.dir / "harness" / block.params["harness"] / "meta.yml"
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -77,6 +87,7 @@ def test_reference_solution_reaches_target(section, block):
     reference = (section.dir / block.params["reference"]).read_text(encoding="utf-8")
 
     result = execute(section, block, reference)
+    skip_if_not_enough_cores(result)
 
     assert result["status"] == "ok", result
     assert result["correct"] is True, result
@@ -92,6 +103,7 @@ def test_reference_solution_reaches_target(section, block):
 def test_starter_code_does_not_reach_target(section, block):
     """Ловит задание, которое решается само собой и ничему не учит."""
     result = execute(section, block, block.params["starter_code"])
+    skip_if_not_enough_cores(result)
 
     assert result["status"] == "ok", result
     assert result["passed"] is False, (

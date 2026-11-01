@@ -1,0 +1,10 @@
+kind: ab
+lang: python
+# auto: OMP_NUM_THREADS не задан — число потоков torch задаёт config() юнита.
+threads: auto
+sizes: [1]
+warmup: 0
+repeats: 5
+timeout_s: 180
+memory_mb: 2048
+tolerance: 0

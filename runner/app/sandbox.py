@@ -5,7 +5,12 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-MAX_PROCESSES = 64
+# RLIMIT_NPROC: защита от fork-бомбы. Ядро считает задачи UID целиком, и
+# каждый поток — тоже задача (вместе с потоками самого runner'а). Задание 2
+# раздела python-runtime запускает до 4 × cores потоков torch (cores ≤ 32,
+# см. threads_exercise/bench.py): при 64 стартовая конфигурация 4 процесса ×
+# 16 потоков на 16-ядерной машине падала на создании потоков.
+MAX_PROCESSES = 256
 MAX_FILE_MB = 64
 
 
