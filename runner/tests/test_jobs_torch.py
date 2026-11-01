@@ -16,3 +16,8 @@ def job_for(harness_dir):
 def test_torch_imports_under_harness_limits():
     result = run_job(job_for(HARNESS))
     assert result["status"] == "ok", result
+
+
+def test_torch_runs_under_threads_auto_within_memory_cap():
+    result = run_job(job_for("tests/fixtures/harness/torch_import_auto"))
+    assert result["status"] == "ok", result

@@ -53,8 +53,15 @@ def _prepare_python(work: Path, harness: Path, units: dict[str, str], meta: dict
         "BENCH_WARMUP": str(meta.get("warmup", 3)),
         "BENCH_REPEATS": str(meta.get("repeats", 11)),
         "BENCH_SIZES": ",".join(str(s) for s in meta.get("sizes", [1024])),
-        "OMP_NUM_THREADS": "1",
     }
+    # threads: 1 (по умолчанию) закрепляет OMP_NUM_THREADS; "auto" оставляет
+    # переменную незаданной, и библиотека сама выбирает число потоков.
+    if meta.get("threads", 1) != "auto":
+        env["OMP_NUM_THREADS"] = "1"
+    lib = harness.parent / "_lib"
+    if lib.is_dir():
+        for path in lib.glob("*.py"):
+            shutil.copy(path, work / path.name)
     return [sys.executable, "bench.py"], env
 
 
@@ -72,6 +79,12 @@ def run_job(job: dict) -> dict:
         return {
             "status": "unsupported_kind",
             "message": f"Тип харнесса {kind!r} пока не поддерживается",
+        }
+    threads = meta.get("threads", 1)
+    if threads not in (1, "auto") or isinstance(threads, bool):
+        return {
+            "status": "harness_error",
+            "message": f"Некорректное значение threads в meta.yml харнесса: {threads!r} (допустимо 1 или \"auto\")",
         }
     timeout_s = float(job.get("timeout_s", meta.get("timeout_s", 30)))
     repeats = int(meta.get("repeats", 11))

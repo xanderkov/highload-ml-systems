@@ -65,3 +65,34 @@ def test_prepare_python_env_is_minimal_with_omp_threads_pinned(tmp_path):
     # Явный минимальный набор ключей — никакого случайного наследования
     # окружения runner-сервиса (в частности, никакого HOME/LD_* и т.п.).
     assert set(env.keys()) == {"PATH", "PYTHONPATH", "BENCH_WARMUP", "BENCH_REPEATS", "BENCH_SIZES", "OMP_NUM_THREADS"}
+
+
+def test_threads_auto_leaves_omp_unset(tmp_path):
+    from pathlib import Path
+
+    _, env = _prepare_python(tmp_path, Path(HARNESS), {"a": "", "b": ""}, {"threads": "auto"})
+    assert "OMP_NUM_THREADS" not in env
+
+
+def test_threads_default_is_one(tmp_path):
+    from pathlib import Path
+
+    _, env = _prepare_python(tmp_path, Path(HARNESS), {"a": "", "b": ""}, {})
+    assert env["OMP_NUM_THREADS"] == "1"
+
+
+def test_shared_lib_is_copied(tmp_path):
+    from pathlib import Path
+
+    _prepare_python(tmp_path, Path(HARNESS), {"a": "", "b": ""}, {})
+    assert (tmp_path / "helper.py").exists()
+
+
+def test_invalid_threads_is_harness_error():
+    result = run_job(
+        job({"a": read("pysum_slow.py"), "b": read("pysum_fast.py")})
+        | {"harness_dir": "tests/fixtures/harness/pytest_sum_badthreads"}
+    )
+    assert result["status"] == "harness_error"
+    assert "threads" in result["message"]
+    assert "4" in result["message"]
