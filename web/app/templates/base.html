@@ -12,7 +12,18 @@
   <link rel="stylesheet" href="{{ asset_prefix }}/style.css">
 </head>
 <body>
-  <header class="site-header"><a href="/">Оптимизация инференса</a></header>
+  <header class="site-header">
+    <a class="site-home" href="/">Оптимизация инференса</a>
+    {% if course_sections %}
+    <nav class="course-nav" aria-label="Разделы курса">
+      <ol>
+        {% for item in course_sections %}
+        <li><a href="/section/{{ item.id }}"{% if section is defined and item.id == section.id %} aria-current="page"{% endif %}><span class="course-nav-num">{{ "%02d" | format(loop.index) }}</span> {{ item.title }}</a></li>
+        {% endfor %}
+      </ol>
+    </nav>
+    {% endif %}
+  </header>
   <main>{% block content %}{% endblock %}</main>
   {% block scripts %}{% endblock %}
 </body>

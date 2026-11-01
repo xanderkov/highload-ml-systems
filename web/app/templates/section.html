@@ -29,6 +29,23 @@
   <article class="section" data-section="{{ section.id }}">
     {{ body | safe }}
   </article>
+
+  {% if prev_section or next_section %}
+  <nav class="section-pager" aria-label="Соседние разделы">
+    {% if prev_section %}
+    <a class="pager-prev" href="/section/{{ prev_section.id }}" rel="prev">
+      <span class="pager-label">← предыдущий раздел</span>
+      <span class="pager-title">{{ prev_section.title }}</span>
+    </a>
+    {% endif %}
+    {% if next_section %}
+    <a class="pager-next" href="/section/{{ next_section.id }}" rel="next">
+      <span class="pager-label">следующий раздел →</span>
+      <span class="pager-title">{{ next_section.title }}</span>
+    </a>
+    {% endif %}
+  </nav>
+  {% endif %}
 </div>
 {% endblock %}
 {% block scripts %}

@@ -5,7 +5,7 @@ from typing import Literal
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -95,21 +95,35 @@ def cache_info() -> dict:
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
+    """Оглавление курса: все разделы по order. Отсюда же, из шапки, раздел
+    доступен с любой страницы, поэтому главная — не редирект, а карта курса."""
     sections = list_sections(content_root())
     if not sections:
         raise HTTPException(status_code=404, detail="Материалы курса не найдены")
-    section = next((item for item in sections if item.id == "cpu-cache"), sections[0])
-    return RedirectResponse(f"/section/{section.id}", status_code=307)
+    return templates.TemplateResponse(
+        request, "index.html", {"sections": sections, "course_sections": sections}
+    )
 
 
 @app.get("/section/{section_id}", response_class=HTMLResponse)
 def section_page(request: Request, section_id: str):
-    section = find_section(section_id)
+    sections = list_sections(content_root())
+    position = next((i for i, item in enumerate(sections) if item.id == section_id), None)
+    if position is None:
+        raise HTTPException(status_code=404, detail=f"Раздел {section_id} не найден")
+    section = sections[position]
     body, _blocks = render_section(section)
     return templates.TemplateResponse(
         request,
         "section.html",
-        {"section": section, "body": body, "outline": section_outline(section)},
+        {
+            "section": section,
+            "body": body,
+            "outline": section_outline(section),
+            "course_sections": sections,
+            "prev_section": sections[position - 1] if position > 0 else None,
+            "next_section": sections[position + 1] if position + 1 < len(sections) else None,
+        },
     )
 
 

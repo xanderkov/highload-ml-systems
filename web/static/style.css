@@ -107,6 +107,30 @@ img { max-width: 100%; height: auto; }
 .site-header a { color: var(--color-fg); text-decoration: none; }
 .site-header a:hover { color: var(--color-accent-lt); }
 
+/* Разделы курса в шапке: виден весь маршрут, текущий раздел подчёркнут
+   линейкой снизу — тот же приём, что полоса слева у текущей части в
+   оглавлении раздела. На узком экране список переносится строкой ниже. */
+.site-header { flex-wrap: wrap; }
+.course-nav { margin-left: auto; }
+.course-nav ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.course-nav li { margin: 0; }
+.site-header .course-nav a { color: var(--color-muted); }
+.site-header .course-nav a:hover { color: var(--color-accent-lt); }
+.site-header .course-nav a[aria-current="page"] {
+  color: var(--color-bright);
+  box-shadow: inset 0 -1px 0 var(--color-accent);
+}
+.course-nav-num { color: var(--color-faint); font-variant-numeric: tabular-nums; }
+
 /* Полоса страницы шире меры чтения: код, графики, таблицы и виджеты получают
    всю ширину, абзацы держатся в 680px. Оглавление вынуто из потока и прижато к
    левому краю окна, поэтому колонка центрируется по-настоящему. */
@@ -193,6 +217,38 @@ li { margin: 0.4em 0; }
 }
 
 .toc a:hover { background: var(--color-surface); color: var(--color-accent-lt); }
+
+/* Переход к соседним разделам в конце страницы. */
+.section-pager {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  max-width: 680px;
+  margin: 56px 0 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-border);
+}
+.section-pager a {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  text-decoration: none;
+}
+.section-pager a:hover { border-color: var(--color-border-strong); color: var(--color-accent-lt); }
+.section-pager .pager-next { grid-column: 2; text-align: right; }
+.pager-label {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-dim);
+}
+.pager-title { font-size: 14px; color: var(--color-bright); }
+
+.toc .toc-num { margin-right: 10px; }
 
 /* ── Боковое оглавление раздела ──────────────────────────────────────── */
 

@@ -1,11 +1,12 @@
 {% extends "base.html" %}
+{% block title %}Разделы курса · Оптимизация инференса{% endblock %}
 {% block content %}
 <div class="layout">
   <div>
     <h1>Разделы курса</h1>
     <ol class="toc">
       {% for section in sections %}
-      <li><a href="/section/{{ section.id }}">{{ section.title }}</a></li>
+      <li><a href="/section/{{ section.id }}"><span class="toc-num">{{ "%02d" | format(loop.index) }}</span> {{ section.title }}</a></li>
       {% endfor %}
     </ol>
   </div>
