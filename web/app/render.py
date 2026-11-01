@@ -118,10 +118,10 @@ def _build_block(section: Section, info: str, body: str) -> Block:
                 f"{section.dir / 'section.md'}: benchmark {attrs['id']} без поля harness"
             )
         _require_harness(section, params["harness"])
-        if _harness_kind(section, params["harness"]) == "sweep":
+        if _harness_kind(section, params["harness"]) in ("sweep", "series"):
             if "source" not in params:
                 raise ContentError(
-                    f"{section.dir / 'section.md'}: benchmark {attrs['id']} над sweep-харнессом "
+                    f"{section.dir / 'section.md'}: benchmark {attrs['id']} над sweep- или series-харнессом "
                     f"требует поле source"
                 )
             _require_file(section, params["source"], "source")
