@@ -96,3 +96,62 @@ def test_invalid_threads_is_harness_error():
     assert result["status"] == "harness_error"
     assert "threads" in result["message"]
     assert "4" in result["message"]
+
+
+METRICS_HARNESS = "tests/fixtures/harness/metrics_echo"
+
+
+def metrics_job(target, mode="exercise"):
+    return {
+        "mode": mode,
+        "lang": "python",
+        "harness_dir": METRICS_HARNESS,
+        "units": {"a": "x = 1\n", "b": "x = 2\n"},
+        "target": target,
+    }
+
+
+def test_missing_metric_is_output_error():
+    result = run_job(job(
+        {"a": read("pysum_slow.py"), "b": read("pysum_fast.py")},
+        target={"metric": "pss_growth_ratio", "op": "<=", "value": 0.3},
+    ))
+
+    assert result["status"] == "output_error"
+    assert result["message"] == "Харнесс не вернул метрику 'pss_growth_ratio' из цели задания"
+
+
+def test_metrics_are_returned():
+    result = run_job(metrics_job({"metric": "m", "op": "<=", "value": 1}))
+
+    assert result["status"] == "ok"
+    assert result["metrics"] == {"m": 0.5}
+    assert result["baseline_metrics"] == {"m": 0.9}
+    assert result["passed"] is True
+
+
+def test_metric_target_not_met():
+    result = run_job(metrics_job({"metric": "m", "op": "<=", "value": 0.4}))
+
+    assert result["passed"] is False
+
+
+def test_no_metrics_keys_without_harness_metrics():
+    result = run_job(job({"a": read("pysum_slow.py"), "b": read("pysum_fast.py")}))
+
+    assert "metrics" not in result and "baseline_metrics" not in result
+
+
+def test_malformed_metrics_is_output_error(tmp_path):
+    harness = tmp_path / "h"
+    harness.mkdir()
+    (harness / "meta.yml").write_text("kind: ab\nlang: python\nrepeats: 2\nwarmup: 0\n")
+    (harness / "bench.py").write_text(
+        "import json\n"
+        "print(json.dumps({'samples': [{'a': 1.0, 'b': 1.0}] * 2, "
+        "'check': {'a': 1.0, 'b': 1.0}, 'metrics': {'a': 5, 'b': {'m': 'x'}}}))\n"
+    )
+    result = run_job(metrics_job({"metric": "speedup", "op": ">=", "value": 1}) | {"harness_dir": str(harness)})
+
+    assert result["status"] == "output_error"
+    assert "metrics" in result["log"]

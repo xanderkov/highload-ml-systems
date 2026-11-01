@@ -147,6 +147,8 @@ def run_job(job: dict) -> dict:
             payload, error = _parse_sweep_output(proc.stdout, len(sizes))
         else:
             payload, error = _parse_output(proc.stdout, repeats, tuple(job["units"]))
+            if error is None:
+                error = _check_metrics(payload.get("metrics"))
         if error is not None:
             return {
                 "status": "output_error",
@@ -183,8 +185,19 @@ def run_job(job: dict) -> dict:
             float(meta.get("tolerance", 1e-9)),
         )
         result["correct"] = result["correct"] and extra["correct"]
+    harness_metrics = payload.get("metrics")
+    if harness_metrics is not None:
+        result["baseline_metrics"] = harness_metrics.get("a", {})
+        result["metrics"] = harness_metrics.get("b", {})
     if job["mode"] == "exercise":
-        result["passed"] = verdict(stats["speedup"], stats["correct"], job["target"])
+        values = {"speedup": stats["speedup"], **result.get("metrics", {})}
+        try:
+            result["passed"] = verdict(values, stats["correct"], job["target"])
+        except KeyError as exc:
+            return {
+                "status": "output_error",
+                "message": f"Харнесс не вернул метрику {exc.args[0]!r} из цели задания",
+            }
     return result
 
 
@@ -217,6 +230,21 @@ def _parse_output(stdout: str, expected_repeats: int, keys: tuple = ("a", "b")) 
         if not isinstance(sample, dict) or any(key not in sample for key in keys):
             return None, "замер бенчмарка не содержит пару a/b"
     return payload, None
+
+
+def _check_metrics(metrics) -> str | None:
+    """Необязательное поле metrics: {"a": {имя: число}, "b": {имя: число}}."""
+    if metrics is None:
+        return None
+    if not isinstance(metrics, dict):
+        return "metrics должен быть объектом {a: {...}, b: {...}}"
+    for unit, named in metrics.items():
+        if not isinstance(named, dict):
+            return f"metrics[{unit!r}] должен быть объектом имя -> число"
+        for name, value in named.items():
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                return f"metrics[{unit!r}][{name!r}] должно быть конечным числом"
+    return None
 
 
 def _parse_sweep_output(stdout: str, expected_points: int) -> tuple[dict | None, str | None]:

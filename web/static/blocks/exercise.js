@@ -144,9 +144,46 @@ function thresholdOf(target) {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+/** Метрика, операция и порог из строки цели; тот же разбор, что web/app/jobs.py. */
+function parseTarget(target) {
+  const match = /^\s*(\w+)\s*([<>]=?)\s*([\d.]+)\s*$/.exec(String(target || ""));
+  return match ? { metric: match[1], op: match[2], value: Number(match[3]) } : null;
+}
+
+function isCustomMetric(params) {
+  const parsed = parseTarget(params.target);
+  return Boolean(parsed && parsed.metric !== "speedup");
+}
+
+function formatMetric(value) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? String(Number(value.toPrecision(4)))
+    : "—";
+}
+
+function metricRows(data) {
+  const cell = (metrics) =>
+    Object.entries(metrics || {})
+      .map(([name, value]) => `${escapeHtml(name)} = ${formatMetric(value)}`)
+      .join(", ");
+  return `<tr><td>стартовый код</td><td>${cell(data.baseline_metrics)}</td></tr>
+      <tr><td>ваш код</td><td>${cell(data.metrics)}</td><td>${correctness(data.correct)}</td></tr>`;
+}
+
 function render(data, params) {
   const problem = renderProblem(data);
   if (problem) return problem;
+
+  if (isCustomMetric(params)) {
+    return `${verdict(data, params)}
+    <table class="numbers">
+      ${metricRows(data)}
+      <tr><td>время, стартовый код</td><td>${formatMs(data.baseline_ms)}</td></tr>
+      <tr><td>время, ваш код</td><td>${formatMs(data.student_ms)}</td></tr>
+      <tr><td>разброс замеров</td><td>${data.spread_pct.toFixed(1)} %</td></tr>
+    </table>
+    ${renderCompileCommand(data)}`;
+  }
 
   return `${verdict(data, params)}
     <table class="numbers">
@@ -182,6 +219,7 @@ function renderRuns(runs, data) {
 /** Плашка зачёта: единственная сплошная заливка и единственная смена
     полярности на странице. Полоса сравнивает результат с порогом. */
 function passBand(data, params) {
+  if (isCustomMetric(params)) return metricBand(data, params);
   const threshold = thresholdOf(params.target);
   const speedup = data.speedup;
   const margin =
@@ -212,6 +250,21 @@ function passBand(data, params) {
     </div>`;
 }
 
+/** Плашка зачёта для метрики, отличной от ускорения: значение и порог. */
+function metricBand(data, params) {
+  const { metric, op, value } = parseTarget(params.target);
+  const actual = (data.metrics || {})[metric];
+  return `<div class="verdict">
+      <div class="verdict-row">
+        <div class="verdict-num">${formatMetric(actual)}</div>
+        <div>
+          <div class="verdict-word">${escapeHtml(metric)} = ${formatMetric(actual)}</div>
+          <div class="verdict-meta">порог ${escapeHtml(op)} ${value}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
 function verdict(data, params) {
   if (data.passed) return passBand(data, params);
 
@@ -228,7 +281,10 @@ function verdict(data, params) {
 
   // Код верен, но порог не взят. Это не ошибка, а недобор, и выглядеть он
   // должен иначе, чем сломанный код: студенту нужно продолжать, а не чинить.
+  const got = isCustomMetric(params)
+    ? formatMetric((data.metrics || {})[parseTarget(params.target).metric])
+    : formatSpeedup(data.speedup);
   return `<p class="warn">Не хватило: нужно <code>${escapeHtml(
     params.target
-  )}</code>, получилось ${formatSpeedup(data.speedup)}.</p>`;
+  )}</code>, получилось ${got}.</p>`;
 }

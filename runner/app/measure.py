@@ -37,12 +37,23 @@ def ab_result(samples: list[dict], check: dict, tolerance: float) -> dict:
     }
 
 
-def verdict(speedup: float, correct: bool, target: dict) -> bool:
-    if not correct:
-        return False
-    if target["metric"] != "speedup":
-        raise ValueError(f"Неизвестная метрика цели: {target['metric']}")
-    if target["op"] not in (">=", ">"):
+_OPS = {
+    ">=": lambda x, y: x >= y,
+    ">": lambda x, y: x > y,
+    "<=": lambda x, y: x <= y,
+    "<": lambda x, y: x < y,
+}
+
+
+def verdict(values: dict[str, float], correct: bool, target: dict) -> bool:
+    """Зачёт: результат верен и метрика цели проходит порог.
+
+    values — `speedup` плюс метрики, которые вернул харнесс. Отсутствие
+    метрики цели — KeyError (ошибка харнесса, её превращает в output_error
+    run_job), а не молчаливый незачёт.
+    """
+    compare = _OPS.get(target["op"])
+    if compare is None:
         raise ValueError(f"Неизвестная операция сравнения: {target['op']}")
-    value = float(target["value"])
-    return speedup >= value if target["op"] == ">=" else speedup > value
+    actual = values[target["metric"]]
+    return correct and compare(actual, float(target["value"]))

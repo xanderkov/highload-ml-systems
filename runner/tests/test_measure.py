@@ -68,13 +68,34 @@ def test_ab_result_rejects_relatively_large_difference_on_large_values():
 def test_verdict_requires_both_correctness_and_target():
     target = {"metric": "speedup", "op": ">=", "value": 3.0}
 
-    assert verdict(3.5, True, target) is True
-    assert verdict(3.5, False, target) is False
-    assert verdict(2.5, True, target) is False
+    assert verdict({"speedup": 3.5}, True, target) is True
+    assert verdict({"speedup": 3.5}, False, target) is False
+    assert verdict({"speedup": 2.5}, True, target) is False
 
 
 def test_verdict_rejects_unrecognized_op():
     target = {"metric": "speedup", "op": "==", "value": 3.0}
 
     with pytest.raises(ValueError, match="=="):
-        verdict(3.0, True, target)
+        verdict({"speedup": 3.0}, True, target)
+
+
+def test_verdict_lower_is_better():
+    target = {"metric": "pss_growth_ratio", "op": "<=", "value": 0.3}
+    assert verdict({"speedup": 1.0, "pss_growth_ratio": 0.2}, True, target)
+    assert not verdict({"speedup": 1.0, "pss_growth_ratio": 0.5}, True, target)
+
+
+def test_verdict_speedup_unchanged():
+    assert verdict({"speedup": 3.2}, True, {"metric": "speedup", "op": ">=", "value": 3})
+
+
+def test_verdict_all_ops_at_boundary():
+    values = {"speedup": 1.0, "m": 0.3}
+    for op, expected in ((">=", True), (">", False), ("<=", True), ("<", False)):
+        assert verdict(values, True, {"metric": "m", "op": op, "value": 0.3}) is expected
+
+
+def test_verdict_missing_metric_raises_key_error():
+    with pytest.raises(KeyError):
+        verdict({"speedup": 1.0}, True, {"metric": "m", "op": "<=", "value": 1})

@@ -3,14 +3,12 @@ import re
 from app.content import Block, ContentError, Section
 from app.experiments import prepare_units
 
-# Цель задания разбирается один раз здесь, а не в runner'е. Ограничения жёсткие
-# по одной причине: measure.verdict в runner'е бросает ValueError на любой
-# метрике кроме speedup и любой операции кроме >= и >, и этот ValueError уже
-# никто не ловит — POST /run отвечает 500, а студент видит «сервис сломался»
-# вместо честного сообщения об опечатке в материалах. Ловим опечатку здесь,
-# на разборе контента, где из неё получается ContentError с текстом причины.
-TARGET_METRICS = ("speedup",)
-TARGET_OPS = (">=", ">")
+# Цель задания разбирается один раз здесь. Метрики не перечисляются: любая
+# \w+ годится, а есть ли она у харнесса, проверяет runner (нет метрики —
+# output_error с понятным сообщением, а не 500). Операция по-прежнему
+# ограничена: опечатка вроде `=>` ловится здесь как ContentError, а не
+# превращается в ValueError в runner'е.
+TARGET_OPS = (">=", ">", "<=", "<")
 
 TARGET = re.compile(r"^\s*(?P<metric>\w+)\s*(?P<op>[<>=!]+)\s*(?P<value>\d+(?:\.\d+)?)\s*$")
 
@@ -23,11 +21,6 @@ def parse_target(text: str) -> dict:
             f"Не разобралась цель задания: {text!r}. Ожидается вид 'speedup >= 3'"
         )
     metric, op = match.group("metric"), match.group("op")
-    if metric not in TARGET_METRICS:
-        raise ContentError(
-            f"Неизвестная метрика цели {metric!r} в цели {text!r}. "
-            f"Поддерживается только: {', '.join(TARGET_METRICS)}"
-        )
     if op not in TARGET_OPS:
         raise ContentError(
             f"Неизвестная операция сравнения {op!r} в цели {text!r}. "

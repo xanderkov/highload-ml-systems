@@ -79,15 +79,17 @@ def test_parse_target_accepts_strict_greater():
     assert parse_target("speedup > 1.5")["op"] == ">"
 
 
-def test_parse_target_rejects_unknown_metric():
-    # runner бросил бы на этом ValueError и ответил 500
-    with pytest.raises(ContentError, match="latency"):
-        parse_target("latency >= 3")
+def test_parse_target_metric_le():
+    assert parse_target("pss_growth_ratio <= 0.3") == {"metric": "pss_growth_ratio", "op": "<=", "value": 0.3}
 
 
-def test_parse_target_rejects_unsupported_operator():
-    with pytest.raises(ContentError, match="<="):
-        parse_target("speedup <= 3")
+def test_parse_target_lt():
+    assert parse_target("m < 2")["op"] == "<"
+
+
+def test_parse_target_rejects_unknown_op():
+    with pytest.raises(ContentError, match="=>"):
+        parse_target("speedup => 3")
 
 
 def test_parse_target_rejects_garbage():
