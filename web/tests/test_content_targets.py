@@ -43,6 +43,28 @@ def execute(section, block, code):
     return response.json()
 
 
+def find_block(section_id, block_id):
+    for section in list_sections(CONTENT_ROOT):
+        if section.id != section_id:
+            continue
+        _, blocks = render_section(section)
+        for block in blocks:
+            if block.id == block_id:
+                return section, block
+    raise LookupError(f"нет блока {block_id!r} в разделе {section_id!r}")
+
+
+def execute_exercise(section_id, block_id, code):
+    """Запускает задание с произвольным кодом студента (юнит b)."""
+    section, block = find_block(section_id, block_id)
+    assert block.kind == "exercise", block.kind
+    return execute(section, block, code)
+
+
+def read_snippet(name, section_dir="20-python-runtime"):
+    return (CONTENT_ROOT / section_dir / "snippets" / name).read_text(encoding="utf-8")
+
+
 def harness_meta(section, block):
     path = section.dir / "harness" / block.params["harness"] / "meta.yml"
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -60,7 +82,8 @@ def test_reference_solution_reaches_target(section, block):
     assert result["correct"] is True, result
     assert result["passed"] is True, (
         f"Эталон не берёт порог «{block.params['target']}»: "
-        f"получилось {result['speedup']:.2f}x при разбросе {result['spread_pct']:.1f} %"
+        f"получилось {result['speedup']:.2f}x при разбросе {result['spread_pct']:.1f} %, "
+        f"метрики {result.get('metrics')}"
     )
 
 
@@ -73,7 +96,7 @@ def test_starter_code_does_not_reach_target(section, block):
     assert result["status"] == "ok", result
     assert result["passed"] is False, (
         f"Стартовый код уже проходит порог «{block.params['target']}» "
-        f"({result['speedup']:.2f}x) — задание ничему не учит"
+        f"({result['speedup']:.2f}x, метрики {result.get('metrics')}) — задание ничему не учит"
     )
 
 
@@ -104,3 +127,22 @@ def test_benchmark_block_runs(section, block):
         # материалах, а не наблюдение про память.
         assert result["correct"] is True, result
         assert result["baseline_ms"] > 0 and result["student_ms"] > 0, result
+
+
+# ── Раздел «Python как рантайм сервиса», задание 1 (copy-on-write) ──────
+
+
+@pytest.mark.content
+def test_cow_gc_freeze_alone_does_not_pass():
+    """gc.freeze не останавливает инкременты refcount — порог он не берёт."""
+    result = execute_exercise("python-runtime", "cow-exercise", read_snippet("cow_freeze.py"))
+    assert result["status"] == "ok", result
+    assert result["correct"] is True, result
+    assert result["passed"] is False, result
+
+
+@pytest.mark.content
+def test_cow_worker_exception_is_reported():
+    code = read_snippet("cow_starter.py").replace("return data[key]", "raise RuntimeError('boom')")
+    result = execute_exercise("python-runtime", "cow-exercise", code)
+    assert result["status"] == "runtime_error" and "boom" in result["log"], result

@@ -90,3 +90,23 @@ def test_load_section_with_malformed_order_fails(tmp_path):
 
     with pytest.raises(ContentError, match="order"):
         load_section(directory)
+
+
+def test_every_viz_block_has_a_module():
+    """viz-модуль ищется по id блока (app.js): опечатка видна только в браузере."""
+    import os
+    from pathlib import Path
+
+    from app.render import render_section
+
+    root = Path(os.environ.get("CONTENT_ROOT", "/app/content"))
+    if not root.is_dir():
+        pytest.skip("контент не смонтирован")
+    viz_dir = Path(__file__).resolve().parent.parent / "static" / "viz"
+    missing = [
+        f"{section.id}/{block.id}"
+        for section in list_sections(root)
+        for block in render_section(section)[1]
+        if block.kind == "viz" and not (viz_dir / f"{block.id}.js").is_file()
+    ]
+    assert missing == []
