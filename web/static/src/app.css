@@ -29,7 +29,9 @@
   }
 }
 
-@theme {
+/* static: Tailwind иначе пишет в :root только переменные, которые
+   используют утилиты, а цвета серий графиков читает лишь JS (theme.js). */
+@theme static {
   --font-sans: "Inter Variable", "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
 
@@ -232,7 +234,9 @@
 
 /* Проза статьи: цвета typography берутся из токенов, поэтому тёмная тема
    получается сама, без prose-invert. Вне слоёв намеренно: плагин typography
-   кладёт свой .prose в слой utilities, и любой слой ниже проиграл бы ему. */
+   кладёт свой .prose в слой utilities, и любой слой ниже проиграл бы ему.
+   Поэтому же каждый селектор исключает .not-prose (блоки заданий, замеров и
+   viz): без слоя эти правила перебили бы утилиты внутри карточек. */
 .prose {
   --tw-prose-body: var(--color-ink);
   --tw-prose-headings: var(--color-ink);
@@ -251,22 +255,22 @@
   --tw-prose-th-borders: var(--color-line);
   --tw-prose-td-borders: var(--color-line);
 }
-.prose :where(code):not(:where(pre code)) {
+.prose :where(code):not(:where(pre code)):not(:where(.not-prose, .not-prose *)) {
   background: var(--color-surface);
   border: 1px solid var(--color-line);
   border-radius: 0.375rem;
   padding: 0.1em 0.35em;
   font-weight: 500;
 }
-.prose :where(code):not(:where(pre code))::before,
-.prose :where(code):not(:where(pre code))::after {
+.prose :where(code):not(:where(pre code)):not(:where(.not-prose, .not-prose *))::before,
+.prose :where(code):not(:where(pre code)):not(:where(.not-prose, .not-prose *))::after {
   content: none;
 }
-.prose :where(pre) {
+.prose :where(pre):not(:where(.not-prose, .not-prose *)) {
   border: 1px solid var(--color-line);
   overflow-x: auto;
 }
-.prose :where(table) {
+.prose :where(table):not(:where(.not-prose, .not-prose *)) {
   display: block;
   overflow-x: auto;
 }

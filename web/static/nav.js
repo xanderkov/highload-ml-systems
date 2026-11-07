@@ -56,15 +56,26 @@ function watchCurrent(toc) {
   update();
 }
 
-/** Левая панель на узком экране: кнопка ☰, Esc и переход по ссылке закрывают. */
+/** Левая панель на узком экране: кнопка ☰, Esc и переход по ссылке закрывают.
+    Закрытая панель только сдвинута за край экрана, поэтому на узком экране
+    она ещё и inert — иначе Tab водил бы по невидимым ссылкам. */
 function mountDrawer() {
   const toggle = document.querySelector("[data-drawer-toggle]");
   const drawer = document.getElementById(toggle?.getAttribute("aria-controls") || "");
   if (!toggle || !drawer) return;
+  // Граница — брейкпоинт md2 (860px) из app.css.
+  const narrow = window.matchMedia?.("(max-width: 859.98px)");
+  const sync = () => {
+    drawer.toggleAttribute("inert", Boolean(narrow?.matches) && !drawer.hasAttribute("data-open"));
+  };
   const setOpen = (open) => {
     drawer.toggleAttribute("data-open", open);
     toggle.setAttribute("aria-expanded", String(open));
+    sync();
+    if (open) drawer.querySelector("a")?.focus();
   };
+  sync();
+  narrow?.addEventListener?.("change", sync);
   toggle.addEventListener("click", () => setOpen(!drawer.hasAttribute("data-open")));
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && drawer.hasAttribute("data-open")) {

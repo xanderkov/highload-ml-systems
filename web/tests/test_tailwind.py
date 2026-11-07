@@ -77,3 +77,20 @@ def test_app_css_supports_manual_theme(client):
     css = client.get(f"{main.ASSET_PREFIX}/app.css").text
     assert '[data-theme="dark"]' in css or "[data-theme=dark]" in css
     assert ':not([data-theme="light"])' in css or ":not([data-theme=light])" in css
+
+
+def test_light_theme_defines_chart_series(client):
+    # Tailwind v4 пишет в :root только переменные @theme, которые где-то
+    # используются утилитами; цвета серий читает только JS (theme.js).
+    css = client.get(f"{main.ASSET_PREFIX}/app.css").text
+    for light in ("--color-series-1:#4f46e5", "--color-series-2:#0d9488", "--color-series-5:#64748b"):
+        assert light in css
+
+
+def test_prose_overrides_skip_not_prose_blocks(client):
+    css = client.get(f"{main.ASSET_PREFIX}/app.css").text
+    # Последнее вхождение — наши переопределения (они после плагина); у
+    # селекторов самого плагина исключение not-prose есть всегда.
+    for rule in (".prose :where(table)", ".prose :where(pre)", ".prose :where(code)"):
+        start = css.rindex(rule)
+        assert "not-prose" in css[start : css.index("{", start)], rule

@@ -13,6 +13,16 @@ const CHART_DEFAULTS = {
   y_label: "y",
 };
 const CHART_HEIGHT = 300;
+// Отступы .chart по горизонтали (px-3 с двух сторон).
+const CHART_INSET = 24;
+
+/** Ширина графика — от карточки, а не от .chart: пустой .chart скрыт
+    (empty:hidden), и его clientWidth в момент рисования равен нулю. */
+function chartWidth(container) {
+  const card = container.closest(".block-card") || container.parentElement;
+  const width = (card?.clientWidth || 0) - CHART_INSET;
+  return width > 0 ? width : 640;
+}
 const RUN_LABEL = "Замерить";
 
 /** Русское склонение после числа: 1 линия, 2 линии, 5 линий. */
@@ -141,7 +151,7 @@ function drawLines(container, lines, params) {
   disposeChart(container);
   const plot = new uPlot(
     {
-      width: container.clientWidth || 640,
+      width: chartWidth(container),
       height: CHART_HEIGHT,
       scales: { x: { time: false }, y: logY ? { distr: 3 } : {} },
       axes: [axis(options.x_label), axis(options.y_label)],
@@ -161,7 +171,7 @@ function drawLines(container, lines, params) {
     container
   );
 
-  const resize = () => plot.setSize({ width: container.clientWidth || 640, height: CHART_HEIGHT });
+  const resize = () => plot.setSize({ width: chartWidth(container), height: CHART_HEIGHT });
   window.addEventListener("resize", resize);
   container._chart = { plot, resize };
 }
