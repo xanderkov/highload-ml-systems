@@ -1,16 +1,23 @@
 {% extends "base.html" %}
 {% block title %}{{ course_title }}{% endblock %}
 {% block content %}
-<div class="layout">
-  <div>
-    <h1>{{ course_title }}</h1>
-    <p class="course-subtitle">{{ course_subtitle }}</p>
-    <h2>Разделы курса</h2>
-    <ol class="toc">
-      {% for section in sections %}
-      <li><a href="/section/{{ section.id }}"><span class="toc-num">{{ "%02d" | format(loop.index) }}</span> {{ section.title }}</a></li>
-      {% endfor %}
-    </ol>
-  </div>
+<div class="mx-auto max-w-[760px]">
+  <h1 class="text-3xl font-bold tracking-tight md2:text-4xl">{{ course_title }}</h1>
+  <p class="course-subtitle mt-2 text-lg text-muted">{{ course_subtitle }}</p>
+
+  <h2 class="mt-12 mb-4 text-sm font-semibold tracking-wide text-muted uppercase">Разделы курса</h2>
+  <ol class="grid gap-3">
+    {% for section in sections %}
+    <li>
+      <a href="/section/{{ section.id }}" class="card flex gap-4 px-5 py-4 hover:border-accent">
+        <span class="font-mono text-sm text-muted tabular-nums">{{ "%02d" | format(loop.index) }}</span>
+        <span class="min-w-0">
+          <span class="block font-semibold text-ink">{{ section.title }}</span>
+          {% if section.summary %}<span class="mt-1 block text-sm text-muted">{{ section.summary }}</span>{% endif %}
+        </span>
+      </a>
+    </li>
+    {% endfor %}
+  </ol>
 </div>
 {% endblock %}

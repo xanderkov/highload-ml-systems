@@ -30,7 +30,7 @@ def test_section_page_renders_markdown(client):
 
     assert response.status_code == 200
     # Заголовок части несёт якорь: на него ссылается боковое оглавление.
-    assert '<h2 id="part-1"><a class="heading-link" href="#part-1">Привет</a></h2>' in response.text
+    assert '<h2 id="part-1" class="scroll-mt-20"><a class="heading-link" href="#part-1">Привет</a></h2>' in response.text
 
 
 def test_unknown_section_returns_404(client):
@@ -39,9 +39,9 @@ def test_unknown_section_returns_404(client):
 
 def test_page_loads_versioned_styles_and_nested_modules(client):
     response = client.get("/section/demo")
-    for asset in ["style.css", "app.js"]:
+    for asset in ["app.css", "app.js"]:
         assert f'{main.ASSET_PREFIX}/{asset}' in response.text
-    for asset in ["style.css", "app.js", "blocks/exercise.js", "blocks/benchmark.js"]:
+    for asset in ["app.css", "app.js", "blocks/exercise.js", "blocks/benchmark.js"]:
         assert client.get(f"{main.ASSET_PREFIX}/{asset}").status_code == 200
 
 
@@ -95,14 +95,14 @@ def course(tmp_path, monkeypatch):
 
 
 def _course_nav(html: str) -> str:
-    start = html.index('<nav class="course-nav"')
+    start = html.index('<nav id="course-nav"')
     return html[start : html.index("</nav>", start)]
 
 
 def _section_pager(html: str) -> str | None:
-    if '<nav class="section-pager"' not in html:
+    if '<nav class="section-pager' not in html:
         return None
-    start = html.index('<nav class="section-pager"')
+    start = html.index('<nav class="section-pager')
     return html[start : html.index("</nav>", start)]
 
 
@@ -124,8 +124,8 @@ def test_section_page_lists_all_sections_in_order(course, current):
 def test_first_section_has_only_next(course):
     pager = _section_pager(course.get("/section/first").text)
     assert pager is not None
-    assert "предыдущий раздел" not in pager
-    assert "следующий раздел" in pager
+    assert "Предыдущий раздел" not in pager
+    assert "Следующий раздел" in pager
     assert 'href="/section/middle"' in pager and "Средний раздел" in pager
 
 
@@ -134,14 +134,14 @@ def test_middle_section_has_prev_and_next(course):
     assert pager is not None
     assert 'href="/section/first"' in pager and "Первый раздел" in pager
     assert 'href="/section/last"' in pager and "Последний раздел" in pager
-    assert pager.index("предыдущий раздел") < pager.index("следующий раздел")
+    assert pager.index("Предыдущий раздел") < pager.index("Следующий раздел")
     assert "Черновик" not in pager
 
 
 def test_last_section_has_only_prev(course):
     pager = _section_pager(course.get("/section/last").text)
     assert pager is not None
-    assert "следующий раздел" not in pager
+    assert "Следующий раздел" not in pager
     assert 'href="/section/middle"' in pager
 
 

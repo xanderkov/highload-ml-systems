@@ -1,0 +1,65 @@
+"""Сборка Tailwind и каркас страницы.
+
+app.css собирается в стадии vendor образа web; Tailwind кладёт в него только
+утилиты, которые нашёл в исходниках по @source. Если путь в @source сломан
+или класс склеен из кусков строки, элемент молча останется без стиля —
+поэтому проверяем результат сборки, а не исходник.
+"""
+import re
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app import main
+
+APP = Path(main.__file__).resolve().parent
+STATIC = APP.parent / "static"
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    directory = tmp_path / "20-demo"
+    directory.mkdir(parents=True)
+    (directory / "section.md").write_text(
+        "---\nid: demo\ntitle: Демо\norder: 10\n---\n\n## Первая\n\n### Подзаголовок\n\nТекст.\n\n## Вторая\n\nЕщё.\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CONTENT_ROOT", str(tmp_path))
+    return TestClient(main.app)
+
+
+def test_app_css_contains_layout_utility(client):
+    response = client.get(f"{main.ASSET_PREFIX}/app.css")
+    assert response.status_code == 200
+    css = response.text.replace("\\", "")
+    assert "xl:grid-cols-[260px_minmax(0,1fr)_220px]" in css
+
+
+def test_no_dynamic_utility_fragments():
+    pattern = re.compile(
+        r"""["'`](?:bg|text|border|ring|grid-cols|w|h|p|m)-["'`]\s*\+|\b(?:bg|text|border|ring)-\$\{"""
+    )
+    files = [*STATIC.rglob("*.js"), APP / "render.py"]
+    offenders = [str(f) for f in files if "vendor" not in f.parts and pattern.search(f.read_text(encoding="utf-8"))]
+    assert offenders == []
+
+
+def test_center_column_can_shrink(client):
+    assert 'class="min-w-0' in client.get("/section/demo").text
+
+
+def test_headings_have_scroll_margin(client):
+    html = client.get("/section/demo").text
+    heading = re.search(r'<h2[^>]*id="part-1"[^>]*>', html)
+    assert heading and "scroll-mt-20" in heading.group(0)
+
+
+def test_no_external_urls(client):
+    for path in ("/", "/section/demo"):
+        assert not re.search(r'(src|href)="(https?:)?//', client.get(path).text)
+
+
+def test_old_stylesheet_is_gone(client):
+    assert "style.css" not in client.get("/section/demo").text
+    assert "app.css" in client.get("/section/demo").text

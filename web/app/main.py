@@ -117,6 +117,7 @@ def section_page(request: Request, section_id: str):
             "section": section,
             "body": body,
             "outline": section_outline(section),
+            "section_number": position + 1,
             "course_sections": sections,
             "prev_section": sections[position - 1] if position > 0 else None,
             "next_section": sections[position + 1] if position + 1 < len(sections) else None,

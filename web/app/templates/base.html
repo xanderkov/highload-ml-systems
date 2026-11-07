@@ -4,27 +4,54 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ course_title }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/vendor/fonts/inter/index.css">
   <link rel="stylesheet" href="/static/vendor/fonts/jetbrains-mono/400.css">
   <link rel="stylesheet" href="/static/vendor/fonts/jetbrains-mono/500.css">
   <link rel="stylesheet" href="/static/vendor/fonts/jetbrains-mono/700.css">
   <link rel="stylesheet" href="/static/vendor/uplot/uPlot.min.css">
   <link rel="stylesheet" href="/static/vendor/katex/katex.min.css">
-  <link rel="stylesheet" href="{{ asset_prefix }}/style.css">
+  <link rel="stylesheet" href="{{ asset_prefix }}/app.css">
 </head>
-<body>
-  <header class="site-header">
-    <a class="site-home" href="/">{{ course_title }}</a>
-    {% if course_sections %}
-    <nav class="course-nav" aria-label="Разделы курса">
-      <ol>
+<body class="min-h-screen bg-page font-sans text-ink antialiased">
+  <header class="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-line bg-page/90 px-4 backdrop-blur md2:px-6">
+    <button type="button" class="btn px-2.5 md2:hidden" data-drawer-toggle aria-controls="course-nav" aria-expanded="false" aria-label="Разделы курса">☰</button>
+    <a class="site-home truncate text-[15px] font-semibold tracking-tight text-ink hover:text-accent" href="/">{{ course_title }}</a>
+    <span class="hidden truncate text-sm text-muted sm:inline">{{ course_subtitle }}</span>
+  </header>
+
+  <div class="mx-auto max-w-[1440px] md2:grid md2:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_220px]">
+    <nav id="course-nav" data-drawer aria-label="Разделы курса"
+         class="fixed top-14 bottom-0 left-0 z-30 w-72 -translate-x-full overflow-y-auto border-r border-line bg-page px-4 py-6 transition-transform data-[open]:translate-x-0 md2:sticky md2:z-auto md2:h-[calc(100vh-3.5rem)] md2:w-auto md2:translate-x-0 md2:transition-none">
+      <p class="mb-3 px-2 text-xs font-semibold tracking-wide text-muted uppercase">Разделы</p>
+      <ol class="space-y-1">
         {% for item in course_sections %}
-        <li><a href="/section/{{ item.id }}"{% if section is defined and item.id == section.id %} aria-current="page"{% endif %}><span class="course-nav-num">{{ "%02d" | format(loop.index) }}</span> {{ item.title }}</a></li>
+        {% set current = section is defined and item.id == section.id %}
+        <li data-section-nav="{{ item.id }}">
+          <a href="/section/{{ item.id }}"{% if current %} aria-current="page"{% endif %}
+             class="flex items-baseline gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-surface aria-[current=page]:bg-surface aria-[current=page]:font-semibold aria-[current=page]:text-accent">
+            <span class="font-mono text-xs text-muted tabular-nums">{{ "%02d" | format(loop.index) }}</span>
+            <span class="min-w-0 flex-1">{{ item.title }}</span>
+          </a>
+          {% if current and outline %}
+          <ol class="mt-1 mb-2 ml-[1.15rem] space-y-0.5 border-l border-line pl-3">
+            {% for part in outline %}
+            <li><a href="#{{ part.id }}" class="block rounded px-2 py-1 text-[13px] leading-snug text-muted hover:text-ink">{{ part.title }}</a></li>
+            {% endfor %}
+          </ol>
+          {% endif %}
+        </li>
         {% endfor %}
       </ol>
     </nav>
-    {% endif %}
-  </header>
-  <main>{% block content %}{% endblock %}</main>
+
+    <main class="min-w-0 px-4 pt-8 pb-24 md2:px-10 md2:pt-10">
+      {% block content %}{% endblock %}
+    </main>
+
+    <aside class="hidden xl:block">
+      {% block aside %}{% endblock %}
+    </aside>
+  </div>
   {% block scripts %}{% endblock %}
 </body>
 </html>

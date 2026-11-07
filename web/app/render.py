@@ -182,7 +182,7 @@ def render_section(section: Section) -> tuple[str, list[Block]]:
         blocks.append(block)
         payload = escape(json.dumps(block.params, ensure_ascii=False), quote=True)
         return (
-            f'<div class="block" data-kind="{block.kind}" data-id="{block.id}" '
+            f'<div class="block not-prose" data-kind="{block.kind}" data-id="{block.id}" '
             f'data-lang="{block.lang or ""}" data-params="{payload}"></div>\n'
         )
 
@@ -210,6 +210,9 @@ def render_section(section: Section) -> tuple[str, list[Block]]:
                 suffix += 1
         heading_ids.add(anchor)
         token.attrSet("id", anchor)
+        # Отступ при переходе по якорю: иначе заголовок уезжает под
+        # закреплённую верхнюю полосу страницы.
+        token.attrJoin("class", "scroll-mt-20")
         if default_heading:
             opening = default_heading(tokens, idx, options, env)
         else:

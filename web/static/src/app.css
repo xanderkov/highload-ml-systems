@@ -1,0 +1,158 @@
+/* Исходник стилей курса. Собирается Tailwind CLI в стадии vendor образа web
+   (см. web/Dockerfile) в /app/static/app.css.
+
+   Правило для всего кода, который пишет разметку (шаблоны, render.py, JS):
+   имена утилит — только полными строковыми литералами. Tailwind находит
+   классы простым поиском по исходникам, и `"bg-" + color` он не увидит —
+   элемент останется без стиля. Состояния — словарём полных имён. */
+
+@import "tailwindcss" source(none);
+@plugin "@tailwindcss/typography";
+
+@source "../../app/templates";
+@source "../../app/render.py";
+@source "../*.js";
+@source "../blocks";
+@source "../viz";
+
+@theme {
+  --font-sans: "Inter Variable", "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  --breakpoint-md2: 860px;
+  --breakpoint-xl: 1200px;
+
+  --color-page: #ffffff;
+  --color-surface: #f8fafc;
+  --color-line: #e2e8f0;
+  --color-ink: #0f172a;
+  --color-muted: #64748b;
+  --color-accent: #4f46e5;
+  --color-good: #16a34a;
+  --color-bad: #dc2626;
+  --color-warn: #d97706;
+
+  --color-series-1: #4f46e5;
+  --color-series-2: #0d9488;
+  --color-series-3: #ea580c;
+  --color-series-4: #db2777;
+  --color-series-5: #64748b;
+}
+
+@layer base {
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-page: #0b1020;
+      --color-surface: #111827;
+      --color-line: #1f2937;
+      --color-ink: #e5e7eb;
+      --color-muted: #94a3b8;
+      --color-accent: #818cf8;
+      --color-good: #4ade80;
+      --color-bad: #f87171;
+      --color-warn: #fbbf24;
+
+      --color-series-1: #818cf8;
+      --color-series-2: #2dd4bf;
+      --color-series-3: #fb923c;
+      --color-series-4: #f472b6;
+      --color-series-5: #94a3b8;
+
+      color-scheme: dark;
+    }
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--color-page);
+    color: var(--color-ink);
+  }
+}
+
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-line);
+    background: var(--color-page);
+    padding: 0.4rem 0.9rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-ink);
+    cursor: pointer;
+    transition: background-color 120ms, border-color 120ms;
+  }
+  .btn:hover:not(:disabled) {
+    background: var(--color-surface);
+  }
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+  .btn:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+  .btn-primary {
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    /* Цвет страницы, а не белый: в тёмной теме акцент светлый, и белый
+       текст на нём не читается. */
+    color: var(--color-page);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--color-accent) 88%, black);
+  }
+
+  .card {
+    border: 1px solid var(--color-line);
+    border-radius: 0.5rem;
+    background: var(--color-page);
+  }
+}
+
+/* Проза статьи: цвета typography берутся из токенов, поэтому тёмная тема
+   получается сама, без prose-invert. Вне слоёв намеренно: плагин typography
+   кладёт свой .prose в слой utilities, и любой слой ниже проиграл бы ему. */
+.prose {
+  --tw-prose-body: var(--color-ink);
+  --tw-prose-headings: var(--color-ink);
+  --tw-prose-lead: var(--color-muted);
+  --tw-prose-links: var(--color-accent);
+  --tw-prose-bold: var(--color-ink);
+  --tw-prose-counters: var(--color-muted);
+  --tw-prose-bullets: var(--color-line);
+  --tw-prose-hr: var(--color-line);
+  --tw-prose-quotes: var(--color-ink);
+  --tw-prose-quote-borders: var(--color-accent);
+  --tw-prose-captions: var(--color-muted);
+  --tw-prose-code: var(--color-ink);
+  --tw-prose-pre-code: var(--color-ink);
+  --tw-prose-pre-bg: var(--color-surface);
+  --tw-prose-th-borders: var(--color-line);
+  --tw-prose-td-borders: var(--color-line);
+}
+.prose :where(code):not(:where(pre code)) {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 0.375rem;
+  padding: 0.1em 0.35em;
+  font-weight: 500;
+}
+.prose :where(code):not(:where(pre code))::before,
+.prose :where(code):not(:where(pre code))::after {
+  content: none;
+}
+.prose :where(pre) {
+  border: 1px solid var(--color-line);
+  overflow-x: auto;
+}
+.prose :where(table) {
+  display: block;
+  overflow-x: auto;
+}

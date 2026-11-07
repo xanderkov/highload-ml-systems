@@ -27,7 +27,7 @@ def test_markdown_renders_to_html(tmp_path):
 
     html, blocks = render_section(section)
 
-    assert '<h1 id="heading-заголовок"><a class="heading-link" href="#heading-заголовок">Заголовок</a></h1>' in html
+    assert '<h1 id="heading-заголовок" class="scroll-mt-20"><a class="heading-link" href="#heading-заголовок">Заголовок</a></h1>' in html
     assert "<strong>жирным</strong>" in html
     assert blocks == []
 
@@ -213,8 +213,8 @@ def test_h2_headings_get_sequential_anchors(tmp_path):
 
     html, _ = render_section(section)
 
-    assert '<h2 id="part-1"><a class="heading-link" href="#part-1">Первая</a></h2>' in html
-    assert '<h2 id="part-2"><a class="heading-link" href="#part-2">Вторая</a></h2>' in html
+    assert '<h2 id="part-1" class="scroll-mt-20"><a class="heading-link" href="#part-1">Первая</a></h2>' in html
+    assert '<h2 id="part-2" class="scroll-mt-20"><a class="heading-link" href="#part-2">Вторая</a></h2>' in html
 
 
 def test_h3_headings_have_permalink(tmp_path):
@@ -222,7 +222,7 @@ def test_h3_headings_have_permalink(tmp_path):
 
     html, _ = render_section(section)
 
-    assert '<h3 id="heading-подзаголовок"><a class="heading-link" href="#heading-подзаголовок">Подзаголовок</a></h3>' in html
+    assert '<h3 id="heading-подзаголовок" class="scroll-mt-20"><a class="heading-link" href="#heading-подзаголовок">Подзаголовок</a></h3>' in html
 
 
 def test_outline_lists_parts_in_order(tmp_path):

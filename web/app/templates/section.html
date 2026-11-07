@@ -1,53 +1,49 @@
 {% extends "base.html" %}
 {% block title %}{{ section.title }} · {{ course_title }}{% endblock %}
 {% block content %}
-<div class="layout">
-  {% if outline %}
-  <nav class="section-toc" aria-label="Содержание раздела">
-    <div class="toc-head">
-      <span class="toc-section">{{ section.title }}</span>
-      <span class="toc-progress" hidden></span>
-    </div>
-    <div class="toc-bar" aria-hidden="true">
-      {% for part in outline %}<span data-part="{{ part.id }}"></span>{% endfor %}
-    </div>
-    <ol class="toc-parts">
-      {% for part in outline %}
-      <li data-part="{{ part.id }}"
-          {% if part.exercises %}data-exercises="{{ part.exercises | join(',') }}"{% endif %}>
-        <a href="#{{ part.id }}">
-          <span class="toc-num">{{ "%02d" | format(loop.index) }}</span>
-          <span class="toc-title">{{ part.title }}</span>
-          <span class="toc-mark" hidden>✓</span>
-        </a>
-      </li>
-      {% endfor %}
-    </ol>
-  </nav>
-  {% endif %}
+<div class="mx-auto max-w-[760px]">
+  <p class="mb-2 font-mono text-xs text-muted">Раздел {{ "%02d" | format(section_number) }}</p>
+  <h1 class="mb-8 text-3xl font-bold tracking-tight text-ink md2:text-4xl">{{ section.title }}</h1>
 
-  <article class="section" data-section="{{ section.id }}">
+  <article class="section prose max-w-none prose-headings:tracking-tight prose-h2:mt-14 prose-a:font-medium prose-a:no-underline hover:prose-a:underline" data-section="{{ section.id }}">
     {{ body | safe }}
   </article>
 
   {% if prev_section or next_section %}
-  <nav class="section-pager" aria-label="Соседние разделы">
+  <nav class="section-pager mt-16 grid gap-3 border-t border-line pt-8 sm:grid-cols-2" aria-label="Соседние разделы">
     {% if prev_section %}
-    <a class="pager-prev" href="/section/{{ prev_section.id }}" rel="prev">
-      <span class="pager-label">← предыдущий раздел</span>
-      <span class="pager-title">{{ prev_section.title }}</span>
+    <a class="card block px-4 py-3 hover:border-accent" href="/section/{{ prev_section.id }}" rel="prev">
+      <span class="block text-xs text-muted">← Предыдущий раздел</span>
+      <span class="mt-0.5 block font-medium text-ink">{{ prev_section.title }}</span>
     </a>
-    {% endif %}
+    {% else %}<span class="hidden sm:block"></span>{% endif %}
     {% if next_section %}
-    <a class="pager-next" href="/section/{{ next_section.id }}" rel="next">
-      <span class="pager-label">следующий раздел →</span>
-      <span class="pager-title">{{ next_section.title }}</span>
+    <a class="card block px-4 py-3 text-right hover:border-accent" href="/section/{{ next_section.id }}" rel="next">
+      <span class="block text-xs text-muted">Следующий раздел →</span>
+      <span class="mt-0.5 block font-medium text-ink">{{ next_section.title }}</span>
     </a>
     {% endif %}
   </nav>
   {% endif %}
 </div>
 {% endblock %}
+
+{% block aside %}
+{% if outline %}
+<nav id="page-toc" class="sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto py-10 pr-4 pl-2" aria-label="На этой странице">
+  <p class="mb-3 text-xs font-semibold tracking-wide text-muted uppercase">На этой странице</p>
+  <ol class="space-y-1 border-l border-line">
+    {% for part in outline %}
+    <li data-part="{{ part.id }}"{% if part.exercises %} data-exercises="{{ part.exercises | join(',') }}"{% endif %}>
+      <a href="#{{ part.id }}" data-toc-link
+         class="-ml-px block border-l border-transparent py-1 pl-3 text-[13px] leading-snug text-muted hover:text-ink aria-[current=true]:border-accent aria-[current=true]:text-accent">{{ part.title }}</a>
+    </li>
+    {% endfor %}
+  </ol>
+</nav>
+{% endif %}
+{% endblock %}
+
 {% block scripts %}
 <script src="/static/vendor/ace/ace.js"></script>
 <script src="/static/vendor/uplot/uPlot.iife.min.js"></script>
