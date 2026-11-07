@@ -36,18 +36,10 @@ def main() -> None:
         result = execute(section, block, "")
         if result.get("status") != "ok":
             print(f"benchmark {block.id}: !! {result}", flush=True)
-        elif "series" in result:
-            points = " ".join(
-                f"{p['size']}:{p['ms_per_element'] * 1e6:.2f}ns" for p in result["series"]
-            )
-            print(f"benchmark {block.id} (sweep): {points}", flush=True)
         else:
-            print(
-                f"benchmark {block.id}: a={result['baseline_ms']:.1f}ms "
-                f"b={result['student_ms']:.1f}ms ratio={result['speedup']:.2f}x "
-                f"correct={result['correct']} spread={result['spread_pct']:.1f}%",
-                flush=True,
-            )
+            for line in result.get("lines", []):
+                points = " ".join(f"{p['x']:g}:{p['y']:.3g}" for p in line["points"])
+                print(f"benchmark {block.id} [{line['name']}]: {points}", flush=True)
 
 
 if __name__ == "__main__":

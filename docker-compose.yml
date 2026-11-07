@@ -17,15 +17,11 @@ services:
     init: true  # reap убитых потомков заданий (иначе остаются zombie)
     volumes:
       - ./content:/content:ro
-      - ./.runtime:/host-info:ro
     environment:
       CONTENT_ROOT: /content
     networks: [back]
     tmpfs:
-      # exec: compiled benchmark binaries are written here and executed
-      # directly from this mount — Docker's tmpfs defaults to noexec, which
-      # would make every job fail with PermissionError.
-      - /work:size=512m,mode=1777,exec
+      - /work:size=512m,mode=1777
 
 networks:
   front:

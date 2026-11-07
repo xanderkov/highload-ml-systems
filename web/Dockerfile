@@ -8,7 +8,6 @@ RUN mkdir -p /out/fonts \
  && cp -r node_modules/@fontsource/jetbrains-mono /out/fonts/jetbrains-mono
 RUN mkdir -p /out/ace /out/uplot /out/katex \
  && cp node_modules/ace-builds/src-min-noconflict/ace.js \
-       node_modules/ace-builds/src-min-noconflict/mode-c_cpp.js \
        node_modules/ace-builds/src-min-noconflict/mode-python.js \
        node_modules/ace-builds/src-min-noconflict/theme-github_dark.js \
        node_modules/ace-builds/src-min-noconflict/theme-github.js /out/ace/ \

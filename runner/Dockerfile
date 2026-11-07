@@ -1,7 +1,4 @@
 FROM python:3.12-slim
-RUN apt-get update \
- && apt-get install -y --no-install-recommends build-essential \
- && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 # CPU-only torch: the default PyPI x86_64 wheel drags in ~GBs of CUDA libs.
 RUN if [ "$(uname -m)" = "x86_64" ]; then \

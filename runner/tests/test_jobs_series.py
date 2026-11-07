@@ -21,7 +21,6 @@ def test_series_returns_lines():
     result = run_job(job())
 
     assert result["status"] == "ok"
-    assert result["compile_command"] is None
     assert [line["name"] for line in result["lines"]] == ["first", "second"]
     assert len(result["lines"][0]["points"]) == 3
     for field in ("speedup", "correct", "passed", "baseline_ms", "student_ms", "series"):
@@ -34,10 +33,10 @@ def test_series_student_error_is_reported():
     assert result["status"] == "runtime_error"
 
 
-def test_series_rejects_c():
+def test_c_is_no_longer_supported():
     result = run_job(job(lang="c"))
 
-    assert result["status"] == "unsupported_kind"
+    assert result["status"] == "unsupported_lang"
 
 
 @pytest.mark.parametrize(

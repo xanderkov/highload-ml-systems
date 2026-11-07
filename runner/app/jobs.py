@@ -8,8 +8,7 @@ from pathlib import Path
 
 import yaml
 
-from app.build import COMPILE_TIMEOUT_S, CompileError, CompileTimeout, MINIMAL_ENV, build_c
-from app.measure import ab_result, verdict, median
+from app.measure import ab_result, verdict
 from app.sandbox import run
 
 CONTENT_ROOT = Path(os.environ.get("CONTENT_ROOT", "/content"))
@@ -23,8 +22,8 @@ MEMORY_MB = int(os.environ.get("BENCH_MEMORY_MB", "2048"))
 # "wrong but fast" case. Clamp instead of propagating it.
 MAX_SPEEDUP = 1_000_000.0
 
-SUPPORTED_LANGS = {"c", "python"}
-SUPPORTED_KINDS = {"ab", "sweep", "series"}
+SUPPORTED_LANGS = {"python"}
+SUPPORTED_KINDS = {"ab", "series"}
 
 
 def load_meta(harness_dir: str) -> tuple[Path, dict]:
@@ -39,7 +38,7 @@ def _prepare_python(work: Path, harness: Path, units: dict[str, str], meta: dict
     """Готовит запуск Python-харнесса: студенческий и baseline-модули + bench.py.
 
     Возвращает команду и окружение процесса. Окружение явное и минимальное
-    (как MINIMAL_ENV для C) — ни в коем случае не наследует окружение
+    — ни в коем случае не наследует окружение
     сервиса runner. OMP_NUM_THREADS=1 обязателен: NumPy на OpenBLAS иначе
     незаметно уходит в многопоточность, и урок про память подменяется
     уроком про число потоков с нестабильными числами от прогона к прогону.
@@ -80,12 +79,6 @@ def run_job(job: dict) -> dict:
             "status": "unsupported_kind",
             "message": f"Тип харнесса {kind!r} пока не поддерживается",
         }
-    if kind == "series" and lang != "python":
-        # Многолинейные графики пока делают только Python-харнессы.
-        return {
-            "status": "unsupported_kind",
-            "message": f"Тип харнесса {kind!r} поддерживается только для Python",
-        }
     threads = meta.get("threads", 1)
     if threads not in (1, "auto") or isinstance(threads, bool):
         return {
@@ -94,47 +87,14 @@ def run_job(job: dict) -> dict:
         }
     timeout_s = float(job.get("timeout_s", meta.get("timeout_s", 30)))
     repeats = int(meta.get("repeats", 11))
-    sizes = meta.get("sizes", [1024])
-    defines = {
-        "BENCH_WARMUP": meta.get("warmup", 3),
-        "BENCH_REPEATS": repeats,
-        "BENCH_SIZES": "{" + ",".join(str(s) for s in sizes) + "}",
-        "BENCH_NSIZES": len(sizes),
-    }
 
     WORK_ROOT.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=WORK_ROOT) as tmp:
         work = Path(tmp)
-        if lang == "python":
-            # No compilation stage for Python: a syntax error in the
-            # student's module surfaces at import time as a non-zero exit
-            # from bench.py, handled below as runtime_error — with
-            # SyntaxError's own message already naming the line.
-            command, env = _prepare_python(work, harness, job["units"], meta)
-            compile_command = None
-        else:
-            try:
-                build = build_c(work, harness, job["units"], meta.get("cflags", ["-O3"]), defines, unit_cflags=meta.get("unit_cflags"))
-            except CompileTimeout as exc:
-                return {
-                    "status": "compile_timeout",
-                    "message": f"Компиляция не уложилась в {COMPILE_TIMEOUT_S:.0f} с",
-                    "log": exc.log[-4000:],
-                }
-            except CompileError as exc:
-                # A line number only means something to the student if the
-                # failing unit was their own submission ("b" by job-format
-                # convention) — a baseline or harness/link failure must not
-                # leak a line into the student's editor (Task 10 highlights it).
-                is_student_unit = exc.unit == job.get("edited_unit", "b")
-                return {
-                    "status": "compile_error",
-                    "message": "Код не скомпилировался",
-                    "log": exc.log[-4000:],
-                    "line": exc.line if is_student_unit else None,
-                }
-            command, env = [str(build.binary)], MINIMAL_ENV
-            compile_command = build.compile_command
+        # Синтаксическая ошибка в модуле студента всплывает при импорте как
+        # ненулевой код выхода bench.py и обрабатывается ниже как
+        # runtime_error — с сообщением SyntaxError, где уже есть номер строки.
+        command, env = _prepare_python(work, harness, job["units"], meta)
 
         proc = run(command, work, timeout_s=timeout_s, memory_mb=min(MEMORY_MB, int(meta.get("memory_mb", MEMORY_MB))), env=env)
         if proc.timed_out:
@@ -149,9 +109,7 @@ def run_job(job: dict) -> dict:
                 "log": proc.stderr[-4000:],
             }
 
-        if kind == "sweep":
-            payload, error = _parse_sweep_output(proc.stdout, len(sizes))
-        elif kind == "series":
+        if kind == "series":
             payload, error = _parse_lines_output(proc.stdout)
         else:
             payload, error = _parse_output(proc.stdout, repeats, tuple(job["units"]))
@@ -164,22 +122,10 @@ def run_job(job: dict) -> dict:
                 "log": (error + "\n" + proc.stderr[-4000:]).strip(),
             }
 
-    if kind == "sweep":
-        # A sweep measures one implementation across sizes, it never compares
-        # two — no baseline, no speedup, no verdict, no correctness check.
-        # Emitting any A/B field here (even a meaningless one) risks being
-        # read downstream as a real comparison result.
-        return {
-            "status": "ok",
-            "compile_command": compile_command,
-            "series": payload["series"],
-        }
-
     if kind == "series":
-        # Как и sweep, series не сравнивает две реализации: только линии.
+        # series не сравнивает две реализации: только линии.
         return {
             "status": "ok",
-            "compile_command": compile_command,
             "lines": payload["lines"],
         }
 
@@ -188,19 +134,10 @@ def run_job(job: dict) -> dict:
         stats["speedup"] = MAX_SPEEDUP
     result = {
         "status": "ok",
-        "compile_command": compile_command,
         "stdout": "",
         "stderr": proc.stderr[-4000:],
         **stats,
     }
-    result["variant_ms"] = [median([sample[key] for sample in payload["samples"]]) for key in job["units"]]
-    for key in list(job["units"])[2:]:
-        extra = ab_result(
-            [{"a": sample["a"], "b": sample[key]} for sample in payload["samples"]],
-            {"a": payload["check"]["a"], "b": payload["check"][key]},
-            float(meta.get("tolerance", 1e-9)),
-        )
-        result["correct"] = result["correct"] and extra["correct"]
     harness_metrics = payload.get("metrics")
     if harness_metrics is not None:
         result["baseline_metrics"] = harness_metrics.get("a", {})
@@ -226,7 +163,7 @@ def _parse_output(stdout: str, expected_repeats: int, keys: tuple = ("a", "b")) 
     с StatisticsError. Также проверяет, что число замеров совпадает с
     meta["repeats"] и что в каждом замере есть пара a/b — это фиксирует
     инвариант протокола (warmup отброшен, A/B парные), который иначе никак
-    не проверяется и легко сломать при копировании bench.c под новый харнесс.
+    не проверяется и легко сломать при копировании bench.py под новый харнесс.
     """
     lines = stdout.strip().splitlines()
     if not lines:
@@ -265,35 +202,6 @@ def _check_metrics(metrics) -> str | None:
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
                 return f"metrics[{unit!r}][{name!r}] должно быть конечным числом"
     return None
-
-
-def _parse_sweep_output(stdout: str, expected_points: int) -> tuple[dict | None, str | None]:
-    """Разбирает последнюю строку вывода бинарника как JSON с series для sweep.
-
-    Отдельная функция от _parse_output, а не общая с ослабленной проверкой:
-    у sweep нет пары a/b и нет check (это не сравнение двух реализаций), но
-    свой инвариант всё равно нужно закрепить тестом, а не только доверием к
-    bench.c — иначе кривая задержки кэша молча потеряет точку или получит
-    мусор вместо числа, а это главный график всего курса. Проверяется: непустой
-    разбираемый JSON, наличие непустого series, ровно столько точек, сколько
-    было запрошено sizes, и обязательные size/ms_per_element в каждой точке.
-    """
-    lines = stdout.strip().splitlines()
-    if not lines:
-        return None, "пустой вывод бенчмарка"
-    try:
-        payload = json.loads(lines[-1])
-        series = payload["series"]
-    except (json.JSONDecodeError, KeyError, TypeError) as exc:
-        return None, f"не удалось разобрать JSON бенчмарка: {exc}"
-    if not series:
-        return None, "бенчмарк не вернул ни одной точки series"
-    if len(series) != expected_points:
-        return None, f"бенчмарк вернул {len(series)} точек series вместо {expected_points}"
-    for point in series:
-        if not isinstance(point, dict) or "size" not in point or "ms_per_element" not in point:
-            return None, "точка series не содержит size и ms_per_element"
-    return payload, None
 
 
 def _is_number(value) -> bool:

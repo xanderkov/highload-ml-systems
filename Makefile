@@ -1,13 +1,16 @@
-.PHONY: up down test test-web test-runner verify-content smoke
+.PHONY: up down test test-repo test-web test-runner verify-content smoke
 
 up:
-	python3 scripts/cache-info.py
 	docker compose up --build
 
 down:
 	docker compose down -v
 
-test: test-web test-runner
+test: test-repo test-web test-runner
+
+# Проверка всего репозитория с хоста: внутри контейнеров виден только свой сервис.
+test-repo:
+	./scripts/check-legacy.sh
 
 test-web:
 	docker compose run --rm --build --no-deps web python -m pytest -q

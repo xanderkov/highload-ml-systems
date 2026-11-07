@@ -36,7 +36,7 @@ def _read_unit(section: Section, relative: str) -> str:
         raise ContentError(f"{path}: не удалось прочитать код варианта: {exc}") from exc
 
 
-def build_job(section: Section, block: Block, code: str, variant: int | None = None) -> dict:
+def build_job(section: Section, block: Block, code: str) -> dict:
     """Собирает job для runner'а из блока раздела и кода студента.
 
     Ключи job'а — контракт с runner.jobs.run_job: `harness_dir` обязателен
@@ -68,18 +68,10 @@ def build_job(section: Section, block: Block, code: str, variant: int | None = N
         job["target"] = parse_target(str(block.params["target"]))
         return job
 
-    if "source" in block.params:
-        # sweep-харнесс: одна реализация на многих размерах, второго юнита нет
-        job["units"] = {"a": _read_unit(section, block.params["source"])}
-    else:
-        names = block.params["variant_sources"]
-        job["units"] = {
-            key: _read_unit(section, f"snippets/{name}") for key, name in zip("abc", names)
-        }
-    if block.params.get("parallel_editors") and variant is not None:
-        job["units"]["abc"[variant]] = code
-        job["edited_unit"] = "abc"[variant]
-    elif "starter_code" in block.params:
+    # Замер — series-харнесс: исходник замера юнитом "a", правка студента
+    # (если блок редактируемый) — юнитом "b".
+    job["units"] = {"a": _read_unit(section, block.params["source"])}
+    if "starter_code" in block.params:
         job["units"]["b"] = code
     job["target"] = None
     return job

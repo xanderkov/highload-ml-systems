@@ -1,7 +1,6 @@
 import hashlib
 import os
 from pathlib import Path
-from typing import Literal
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -55,7 +54,6 @@ class RunRequest(BaseModel):
     section: str
     block: str
     code: str = ""
-    variant: Literal[0, 1, 2] | None = None
 
 
 def content_root() -> Path:
@@ -81,16 +79,6 @@ def content_error_handler(request: Request, exc: ContentError) -> PlainTextRespo
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
-
-
-@app.get("/api/cache-info")
-def cache_info() -> dict:
-    try:
-        response = httpx.get(f"{runner_url()}/cache-info", timeout=5)
-        response.raise_for_status()
-        return response.json()
-    except (httpx.HTTPError, ValueError) as exc:
-        raise HTTPException(status_code=502, detail="Не удалось прочитать размеры кэшей") from exc
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -154,9 +142,7 @@ def api_run(payload: RunRequest) -> dict:
             status_code=404, detail=f"Блок {payload.block} не найден в разделе {payload.section}"
         )
 
-    if payload.variant is not None and (not block.params.get("parallel_editors") or payload.variant >= len(block.params.get("variant_sources", []))):
-        raise HTTPException(status_code=400, detail="Вариант не найден")
-    job = build_job(section, block, payload.code, variant=payload.variant)
+    job = build_job(section, block, payload.code)
     try:
         response = httpx.post(f"{runner_url()}/run", json=job, timeout=RUN_TIMEOUT_S)
     except httpx.RequestError as exc:

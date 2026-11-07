@@ -1,14 +1,12 @@
 // Разбор ответа сервиса замеров, общий для exercise и benchmark.
 
-// Runner отвечает 200 на любой исход и различает их полем status. Восемь
+// Runner отвечает 200 на любой исход и различает их полем status. Шесть
 // статусов — его собственные, service_error добавляет прокси web при поломке
 // runner'а. Тексты здесь — только запасные: runner присылает своё сообщение
 // на русском, и оно точнее (в нём есть числа лимитов).
 const FALLBACK_MESSAGE = {
   unsupported_lang: "Блок объявлен на языке, которого сервис замеров не знает.",
   unsupported_kind: "У харнесса этого блока неизвестный тип прогона.",
-  compile_timeout: "Компилятор не уложился в отведённое время.",
-  compile_error: "Код не скомпилировался.",
   timeout: "Код не уложился в отведённое время.",
   runtime_error: "Программа завершилась с ошибкой.",
   output_error: "Бенчмарк не вернул корректных результатов.",
@@ -42,14 +40,10 @@ export function renderProblem(data) {
   const message = escapeHtml(data.message || FALLBACK_MESSAGE[data.status] || data.status);
   // Полоса слева различает исходы светлотой, а пунктиром — «прервано по
   // таймауту»: это не сломанный код, а не дождавшийся своего конца прогон.
-  const timedOut = data.status === "timeout" || data.status === "compile_timeout";
+  const timedOut = data.status === "timeout";
   const kind =
     (data.status === "service_error" ? "fault" : "bad") + (timedOut ? " is-timeout" : "");
 
-  if (data.status === "compile_error") {
-    const where = data.line ? `, строка ${escapeHtml(data.line)}` : "";
-    return `<p class="${kind}">${message}${where}.</p>${logOf(data)}`;
-  }
   if (data.status === "unsupported_lang" || data.status === "unsupported_kind") {
     // Это не ошибка студента: блок объявлен неправильно в материалах курса.
     return `<p class="fault">${message}</p><p class="hint">Это ошибка в материалах курса, а не в вашем коде.</p>`;
@@ -68,8 +62,6 @@ function logOf(data) {
 const STATUS_LABEL = {
   unsupported_lang: "ошибка в материалах",
   unsupported_kind: "ошибка в материалах",
-  compile_timeout: "сборка не ответила",
-  compile_error: "не собралось",
   timeout: "не уложилось во время",
   runtime_error: "упало на прогоне",
   output_error: "замер не дал чисел",
@@ -80,12 +72,4 @@ export function statusLabel(data) {
   if (data.status !== "ok") return STATUS_LABEL[data.status] || data.status;
   if (data.correct === false) return "ответ не тот";
   return "не хватило";
-}
-
-export function renderCompileCommand(data) {
-  if (!data.compile_command) return "";
-  return `<details class="compile-command">
-    <summary>Чем это скомпилировано</summary>
-    <pre>${escapeHtml(data.compile_command)}</pre>
-  </details>`;
 }

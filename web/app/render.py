@@ -8,12 +8,10 @@ from markdown_it import MarkdownIt
 
 from app.content import Block, ContentError, Section
 
-# sandbox сознательно не поддерживается: у раннера нет режима «просто
-# выполнить» — любой job идёт по A/B-пути, где bench.c объявляет extern fn_b,
-# так что один юнит не слинкуется, а ошибку компиляции нельзя было бы
-# привязать к строке (студенческим считается только юнит "b").
+# Задание идёт по A/B-пути (стартовый код против кода студента), замер —
+# по series-харнессу (линии графика). Других типов запуска у runner'а нет.
 BLOCK_KINDS = {"viz", "benchmark", "exercise"}
-EXT = {"c": "c", "python": "py"}
+EXT = {"python": "py"}
 VIZ_DIR = Path(__file__).resolve().parent.parent / "static" / "viz"
 
 # Схема (http:, data:), протокол-относительный //host и абсолютный /path
@@ -103,7 +101,7 @@ def _build_block(section: Section, info: str, body: str) -> Block:
         harness_kind = _harness_kind(section, params["harness"])
         if harness_kind != "ab":
             # Упражнение показывает A/B-результат (ускорение, разброс, вердикт);
-            # sweep/series этих полей не возвращают.
+            # series этих полей не возвращает.
             raise ContentError(
                 f"{section.dir / 'section.md'}: exercise {attrs['id']}: харнесс {params['harness']} "
                 f"имеет kind: {harness_kind}, а упражнению нужен kind: ab"
@@ -119,31 +117,18 @@ def _build_block(section: Section, info: str, body: str) -> Block:
                 f"{section.dir / 'section.md'}: benchmark {attrs['id']} без поля harness"
             )
         _require_harness(section, params["harness"])
-        if _harness_kind(section, params["harness"]) in ("sweep", "series"):
-            if "source" not in params:
-                raise ContentError(
-                    f"{section.dir / 'section.md'}: benchmark {attrs['id']} над sweep- или series-харнессом "
-                    f"требует поле source"
-                )
-            _require_file(section, params["source"], "source")
-        else:
-            if "variants" not in params:
-                raise ContentError(
-                    f"{section.dir / 'section.md'}: benchmark {attrs['id']} без поля variants"
-                )
-            variants = params["variants"]
-            if not isinstance(variants, list) or len(variants) not in ((2, 3) if params.get("parallel_editors") else (2,)):
-                raise ContentError(
-                    f"{section.dir / 'section.md'}: benchmark {attrs['id']}: нужно ровно два варианта"
-                )
-            sources = []
-            for variant in variants:
-                name = f"{params['harness']}_{variant}.{ext}"
-                _require_file(section, f"snippets/{name}", f"вариант {variant}")
-                sources.append(name)
-            params["variant_sources"] = sources
-            if params.get("parallel_editors"):
-                params["variant_codes"] = [_require_file(section, f"snippets/{name}", "variant") for name in sources]
+        harness_kind = _harness_kind(section, params["harness"])
+        if harness_kind != "series":
+            raise ContentError(
+                f"{section.dir / 'section.md'}: benchmark {attrs['id']}: харнесс {params['harness']} "
+                f"имеет kind: {harness_kind}, а замеру нужен kind: series"
+            )
+        if "source" not in params:
+            raise ContentError(
+                f"{section.dir / 'section.md'}: benchmark {attrs['id']} над series-харнессом "
+                f"требует поле source"
+            )
+        _require_file(section, params["source"], "source")
 
     return Block(kind=kind, id=attrs["id"], lang=lang, params=params)
 

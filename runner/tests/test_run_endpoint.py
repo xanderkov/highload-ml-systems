@@ -8,25 +8,6 @@ def read(name):
         return handle.read()
 
 
-def test_run_endpoint_returns_result():
-    client = TestClient(app)
-
-    response = client.post(
-        "/run",
-        json={
-            "mode": "exercise",
-            "lang": "c",
-            "harness_dir": "tests/fixtures/harness/sumtest",
-            "units": {"a": read("sumtest_slow.c"), "b": read("sumtest_fast.c")},
-            "target": {"metric": "speedup", "op": ">=", "value": 1.2},
-            "timeout_s": 30,
-        },
-    )
-
-    assert response.status_code == 200
-    assert response.json()["status"] == "ok"
-
-
 def test_run_endpoint_supports_python_jobs():
     client = TestClient(app)
 

@@ -24,9 +24,6 @@ def test_numpy_beats_python_loop():
     assert result["status"] == "ok"
     assert result["correct"] is True
     assert result["passed"] is True
-    # На Python-пути компиляции нет — сборка через build_c не запускается,
-    # и compile_command не должен подхватить чужое значение с C-пути.
-    assert result["compile_command"] is None
 
 
 def test_python_syntax_error_is_reported():

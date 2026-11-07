@@ -13,12 +13,12 @@ def make_section(tmp_path, body, *, with_files=True):
     )
     if with_files:
         (directory / "snippets").mkdir()
-        for name in ("sum_starter.c", "sum_ref.c", "sum_rows.c", "sum_cols.c", "walk.c"):
-            (directory / "snippets" / name).write_text("int f(void){return 0;}\n")
+        for name in ("sum_starter.py", "sum_ref.py", "curve.py"):
+            (directory / "snippets" / name).write_text("def f():\n    return 0\n")
         (directory / "harness" / "sum").mkdir(parents=True)
-        (directory / "harness" / "sum" / "meta.yml").write_text("kind: ab\nlang: c\n")
-        (directory / "harness" / "stride").mkdir(parents=True)
-        (directory / "harness" / "stride" / "meta.yml").write_text("kind: sweep\nlang: c\n")
+        (directory / "harness" / "sum" / "meta.yml").write_text("kind: ab\n")
+        (directory / "harness" / "curve").mkdir(parents=True)
+        (directory / "harness" / "curve" / "meta.yml").write_text("kind: series\n")
     return load_section(directory)
 
 
@@ -35,11 +35,11 @@ def test_markdown_renders_to_html(tmp_path):
 def test_exercise_block_becomes_placeholder(tmp_path):
     section = make_section(
         tmp_path,
-        "```exercise id=col-sum lang=c\n"
+        "```exercise id=col-sum lang=python\n"
         "title: Ускорь обход\n"
         "target: speedup >= 3\n"
-        "starter: snippets/sum_starter.c\n"
-        "reference: snippets/sum_ref.c\n"
+        "starter: snippets/sum_starter.py\n"
+        "reference: snippets/sum_ref.py\n"
         "harness: sum\n"
         "```\n",
     )
@@ -49,7 +49,7 @@ def test_exercise_block_becomes_placeholder(tmp_path):
     assert len(blocks) == 1
     assert blocks[0].kind == "exercise"
     assert blocks[0].id == "col-sum"
-    assert blocks[0].lang == "c"
+    assert blocks[0].lang == "python"
     assert blocks[0].params["target"] == "speedup >= 3"
     assert 'data-kind="exercise"' in html
     assert 'data-id="col-sum"' in html
@@ -59,22 +59,22 @@ def test_exercise_block_becomes_placeholder(tmp_path):
 def test_exercise_starter_code_is_inlined_into_params(tmp_path):
     section = make_section(
         tmp_path,
-        "```exercise id=col-sum lang=c\n"
+        "```exercise id=col-sum lang=python\n"
         "title: Т\ntarget: speedup >= 3\n"
-        "starter: snippets/sum_starter.c\nreference: snippets/sum_ref.c\nharness: sum\n```\n",
+        "starter: snippets/sum_starter.py\nreference: snippets/sum_ref.py\nharness: sum\n```\n",
     )
 
     _, blocks = render_section(section)
 
-    assert blocks[0].params["starter_code"] == "int f(void){return 0;}\n"
+    assert blocks[0].params["starter_code"] == "def f():\n    return 0\n"
     assert "reference_code" not in blocks[0].params
 
 
 def test_exercise_without_reference_fails(tmp_path):
     section = make_section(
         tmp_path,
-        "```exercise id=x lang=c\ntitle: Т\ntarget: speedup >= 3\n"
-        "starter: snippets/sum_starter.c\nharness: sum\n```\n",
+        "```exercise id=x lang=python\ntitle: Т\ntarget: speedup >= 3\n"
+        "starter: snippets/sum_starter.py\nharness: sum\n```\n",
     )
 
     with pytest.raises(ContentError, match="reference"):
@@ -84,8 +84,8 @@ def test_exercise_without_reference_fails(tmp_path):
 def test_exercise_with_missing_starter_file_fails(tmp_path):
     section = make_section(
         tmp_path,
-        "```exercise id=x lang=c\ntitle: Т\ntarget: speedup >= 3\n"
-        "starter: snippets/nope.c\nreference: snippets/sum_ref.c\nharness: sum\n```\n",
+        "```exercise id=x lang=python\ntitle: Т\ntarget: speedup >= 3\n"
+        "starter: snippets/nope.c\nreference: snippets/sum_ref.py\nharness: sum\n```\n",
     )
 
     with pytest.raises(ContentError, match="nope.c"):
@@ -95,8 +95,8 @@ def test_exercise_with_missing_starter_file_fails(tmp_path):
 def test_exercise_with_missing_harness_fails(tmp_path):
     section = make_section(
         tmp_path,
-        "```exercise id=x lang=c\ntitle: Т\ntarget: speedup >= 3\n"
-        "starter: snippets/sum_starter.c\nreference: snippets/sum_ref.c\nharness: missing\n```\n",
+        "```exercise id=x lang=python\ntitle: Т\ntarget: speedup >= 3\n"
+        "starter: snippets/sum_starter.py\nreference: snippets/sum_ref.py\nharness: missing\n```\n",
     )
 
     with pytest.raises(ContentError, match="missing"):
@@ -104,65 +104,44 @@ def test_exercise_with_missing_harness_fails(tmp_path):
 
 
 def test_exercise_over_non_ab_harness_fails(tmp_path):
-    # exercise.js рисует A/B-результат (ускорение, разброс); у sweep/series
-    # таких полей нет, и блок упал бы в браузере.
+    # exercise.js рисует A/B-результат (ускорение, разброс); у series таких
+    # полей нет, и блок упал бы в браузере.
     section = make_section(
         tmp_path,
-        "```exercise id=x lang=c\ntitle: Т\ntarget: speedup >= 3\n"
-        "starter: snippets/sum_starter.c\nreference: snippets/sum_ref.c\nharness: stride\n```\n",
+        "```exercise id=x lang=python\ntitle: Т\ntarget: speedup >= 3\n"
+        "starter: snippets/sum_starter.py\nreference: snippets/sum_ref.py\nharness: curve\n```\n",
     )
 
-    with pytest.raises(ContentError, match="x.*stride.*sweep.*ab"):
+    with pytest.raises(ContentError, match="x.*curve.*series.*ab"):
         render_section(section)
 
 
-def test_benchmark_resolves_variant_files(tmp_path):
+def test_benchmark_over_series_uses_single_source(tmp_path):
     section = make_section(
         tmp_path,
-        "```benchmark id=rows-vs-cols lang=c\nharness: sum\nvariants: [rows, cols]\n```\n",
+        "```benchmark id=curve lang=python\nharness: curve\nsource: snippets/curve.py\n```\n",
     )
 
     _, blocks = render_section(section)
 
-    assert blocks[0].params["variant_sources"] == ["sum_rows.c", "sum_cols.c"]
+    assert blocks[0].params["source"] == "snippets/curve.py"
 
 
-def test_benchmark_with_missing_variant_file_fails(tmp_path):
-    section = make_section(
-        tmp_path,
-        "```benchmark id=x lang=c\nharness: sum\nvariants: [rows, nope]\n```\n",
-    )
-
-    with pytest.raises(ContentError, match="sum_nope.c"):
-        render_section(section)
-
-
-def test_benchmark_requires_exactly_two_variants(tmp_path):
-    section = make_section(
-        tmp_path,
-        "```benchmark id=x lang=c\nharness: sum\nvariants: [rows]\n```\n",
-    )
-
-    with pytest.raises(ContentError, match="ровно два"):
-        render_section(section)
-
-
-def test_sweep_benchmark_uses_single_source(tmp_path):
-    section = make_section(
-        tmp_path,
-        "```benchmark id=ladder lang=c\nharness: stride\nsource: snippets/walk.c\n```\n",
-    )
-
-    _, blocks = render_section(section)
-
-    assert blocks[0].params["source"] == "snippets/walk.c"
-    assert "variant_sources" not in blocks[0].params
-
-
-def test_sweep_benchmark_without_source_fails(tmp_path):
-    section = make_section(tmp_path, "```benchmark id=ladder lang=c\nharness: stride\n```\n")
+def test_benchmark_without_source_fails(tmp_path):
+    section = make_section(tmp_path, "```benchmark id=curve lang=python\nharness: curve\n```\n")
 
     with pytest.raises(ContentError, match="source"):
+        render_section(section)
+
+
+def test_benchmark_over_ab_harness_fails(tmp_path):
+    # Сравнение вариантов ушло вместе с CPU-разделом: замер рисует только линии.
+    section = make_section(
+        tmp_path,
+        "```benchmark id=x lang=python\nharness: sum\nsource: snippets/curve.py\n```\n",
+    )
+
+    with pytest.raises(ContentError, match="x.*sum.*ab.*series"):
         render_section(section)
 
 
@@ -272,9 +251,9 @@ def test_outline_attributes_exercise_to_its_part(tmp_path):
         tmp_path,
         "## Первая\n\nтекст\n\n"
         "## Вторая\n\n"
-        "```exercise id=col-sum lang=c\n"
+        "```exercise id=col-sum lang=python\n"
         "title: Т\ntarget: speedup >= 3\n"
-        "starter: snippets/sum_starter.c\nreference: snippets/sum_ref.c\nharness: sum\n```\n",
+        "starter: snippets/sum_starter.py\nreference: snippets/sum_ref.py\nharness: sum\n```\n",
     )
 
     outline = section_outline(section)

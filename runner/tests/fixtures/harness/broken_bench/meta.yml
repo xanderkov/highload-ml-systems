@@ -1,9 +1,0 @@
-kind: ab
-lang: c
-function: total
-cflags: ["-O2"]
-sizes: [1000]
-warmup: 1
-repeats: 2
-timeout_s: 5
-tolerance: 1e-9

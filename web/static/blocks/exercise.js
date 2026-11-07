@@ -4,12 +4,11 @@ import {
   escapeHtml,
   formatMs,
   formatSpeedup,
-  renderCompileCommand,
   renderProblem,
   statusLabel,
 } from "../result.js";
 
-const LANG_LABEL = { c: "C", python: "Python" };
+const LANG_LABEL = { python: "Python" };
 
 export function mount(element, { sectionId, blockId, lang, params }) {
   element.classList.add("exercise");
@@ -31,7 +30,7 @@ export function mount(element, { sectionId, blockId, lang, params }) {
 
   const starter = params.starter_code || "";
   const editor = ace.edit(element.querySelector(".editor"), {
-    mode: lang === "python" ? "ace/mode/python" : "ace/mode/c_cpp",
+    mode: "ace/mode/python",
     // Тема страницы одна, тёмная — редактор не должен зависеть от системной
     // настройки, иначе на светлой системе он вылезал бы белым пятном.
     theme: "ace/theme/github_dark",
@@ -76,7 +75,6 @@ export function mount(element, { sectionId, blockId, lang, params }) {
       goal.classList.remove("is-veiled");
       result.className = "result";
       result.innerHTML = render(data, params);
-      highlightCompileError(editor, data);
       if (data.passed) {
         markDone(sectionId, blockId);
         setDone();
@@ -94,17 +92,6 @@ export function mount(element, { sectionId, blockId, lang, params }) {
       button.disabled = false;
     }
   });
-}
-
-function highlightCompileError(editor, data) {
-  // Номер строки runner отдаёт только для кода студента (юнит "b"); для
-  // baseline и стадии линковки там всегда null — подсвечивать нечего.
-  editor.session.clearAnnotations();
-  if (data.status === "compile_error" && data.line) {
-    editor.session.setAnnotations([
-      { row: data.line - 1, column: 0, text: data.message || "Ошибка компиляции", type: "error" },
-    ]);
-  }
 }
 
 /** Порог из строки цели вида "speedup >= 3". null, если не разобрался. */
@@ -151,8 +138,7 @@ function render(data, params) {
       <tr><td>время, стартовый код</td><td>${formatMs(data.baseline_ms)}</td></tr>
       <tr><td>время, ваш код</td><td>${formatMs(data.student_ms)}</td></tr>
       <tr><td>разброс замеров</td><td>${data.spread_pct.toFixed(1)} %</td></tr>
-    </table>
-    ${renderCompileCommand(data)}`;
+    </table>`;
   }
 
   return `${verdict(data, params)}
@@ -161,8 +147,7 @@ function render(data, params) {
       <tr><td>ваш код</td><td>${formatMs(data.student_ms)}</td><td>${correctness(data.correct)}</td></tr>
       <tr><td>ускорение</td><td>${formatSpeedup(data.speedup)}</td></tr>
       <tr><td>разброс замеров</td><td>${data.spread_pct.toFixed(1)} %</td></tr>
-    </table>
-    ${renderCompileCommand(data)}`;
+    </table>`;
 }
 
 function correctness(correct) {
@@ -225,7 +210,7 @@ function metricBand(data, params) {
 function diagnostics(data) {
   const text = typeof data.stderr === "string" ? data.stderr.trim() : "";
   if (!text) return "";
-  return `<details class="compile-command harness-log" open>
+  return `<details class="harness-log" open>
     <summary>Что сообщила проверка</summary>
     <pre>${escapeHtml(text)}</pre>
   </details>`;
@@ -235,14 +220,7 @@ function verdict(data, params) {
   if (data.passed) return passBand(data, params);
 
   if (data.correct === false) {
-    // Быстро и неправильно — не оптимизация. Отдельный текст для случая, когда
-    // компилятор просто выбросил код, потому что его результат никому не нужен.
-    const hint =
-      data.speedup >= 1000000
-        ? `<p class="hint">Похоже, компилятор выбросил вычисление целиком: его результат
-           нигде не используется.</p>`
-        : "";
-    return `<p class="bad">Результат разошёлся со стартовым кодом — оптимизация что-то сломала.</p>${hint}${diagnostics(data)}`;
+    return `<p class="bad">Результат разошёлся со стартовым кодом — оптимизация что-то сломала.</p>${diagnostics(data)}`;
   }
 
   // Код верен, но порог не взят. Это не ошибка, а недобор, и выглядеть он

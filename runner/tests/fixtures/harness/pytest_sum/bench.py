@@ -20,7 +20,7 @@ def main() -> None:
     for _ in range(WARMUP):
         check_a, check_b = fn_a(data), fn_b(data)
 
-    # Инварианты протокола замера те же, что в bench.c (см. sumtest):
+    # Инварианты протокола замера:
     # warmup отброшен, A и B чередуются внутри каждого повтора, пишутся
     # только сырые замеры — медиану считает Python в measure.ab_result.
     samples = []

@@ -2,11 +2,11 @@
 // модулем, чтобы блоки не импортировали app.js (тот сам грузит блоки —
 // получился бы цикл импортов).
 
-export async function run(sectionId, blockId, code, variant) {
+export async function run(sectionId, blockId, code) {
   const response = await fetch("/api/run", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ section: sectionId, block: blockId, code, ...(variant === undefined ? {} : { variant }) }),
+    body: JSON.stringify({ section: sectionId, block: blockId, code }),
   });
   if (!response.ok) {
     // Сюда попадают только сбои самой страницы курса: 404 на блок и 502,
