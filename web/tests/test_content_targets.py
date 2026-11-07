@@ -255,3 +255,74 @@ def test_batcher_waiting_for_full_batch_is_reported():
     skip_if_not_enough_cores(result)
     assert result["status"] == "runtime_error", result
     assert "max_batch_size" in result["log"], result
+
+# Типичная ошибка: get_nowait без обработки QueueEmpty — collect_batch бросает.
+BATCHER_RAISES = """
+import asyncio
+
+
+async def collect_batch(queue, max_batch_size, max_delay):
+    batch = [await queue.get()]
+    while len(batch) < max_batch_size:
+        batch.append(queue.get_nowait())
+    return batch
+"""
+
+# Обёртка над эталоном, которая из каждого батча длиннее одного выбрасывает
+# последний запрос: забрала из очереди и не вернула.
+BATCHER_DROPS = """
+
+_collect = collect_batch
+
+
+async def collect_batch(queue, max_batch_size, max_delay):
+    batch = await _collect(queue, max_batch_size, max_delay)
+    if len(batch) > 1:
+        batch.pop()
+    return batch
+"""
+
+# Busy-wait: крутится, пока очередь пуста, отдавая управление, но не засыпая.
+BATCHER_BUSY_WAIT = """
+import asyncio
+
+
+async def collect_batch(queue, max_batch_size, max_delay):
+    while queue.empty():
+        await asyncio.sleep(0)
+    batch = [queue.get_nowait()]
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + max_delay
+    while len(batch) < max_batch_size and loop.time() < deadline:
+        if queue.empty():
+            await asyncio.sleep(0)
+        else:
+            batch.append(queue.get_nowait())
+    return batch
+"""
+
+
+@pytest.mark.content
+def test_batcher_exception_is_shown_to_student():
+    result = execute_exercise("naive-service", "batcher-exercise", BATCHER_RAISES)
+    skip_if_not_enough_cores(result)
+    assert result["status"] == "runtime_error", result
+    assert "QueueEmpty" in result["log"] and "max_batch_size =" not in result["log"], result
+
+
+@pytest.mark.content
+def test_batcher_losing_requests_is_incorrect():
+    code = read_snippet("batcher_ref.py", "30-naive-service") + BATCHER_DROPS
+    result = execute_exercise("naive-service", "batcher-exercise", code)
+    skip_if_not_enough_cores(result)
+    assert result["status"] == "ok", result
+    assert result["correct"] is False and result["passed"] is False, result
+    assert "без ответа" in result["stderr"], result
+
+
+@pytest.mark.content
+def test_batcher_busy_wait_is_warned():
+    result = execute_exercise("naive-service", "batcher-exercise", BATCHER_BUSY_WAIT)
+    skip_if_not_enough_cores(result)
+    assert result["status"] == "ok", result
+    assert "busy-wait" in result["stderr"], result

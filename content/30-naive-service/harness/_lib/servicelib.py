@@ -95,9 +95,17 @@ class ServiceURL(str):
     """Базовый URL сервиса; .pids() — живые процессы сервиса (мастер uvicorn и воркеры)."""
 
     pid: int  # мастер uvicorn (обёртка привязки к CPU делает в него exec)
+    log_path: str  # stdout и stderr сервиса
 
     def pids(self) -> list[int]:
         return sorted(pid for pid, (state, _, _) in _tree(self.pid).items() if state != "Z")
+
+    def stderr_tail(self) -> str:
+        """Последние STDERR_TAIL_BYTES вывода сервиса — для сообщений студенту."""
+        try:
+            return _tail(self.log_path).strip()
+        except OSError:
+            return ""
 
 
 def _free_port() -> int:
@@ -187,6 +195,7 @@ def start_service(app_path: str, *, workers: int = 1, torch_threads: int | None 
         with open(log_path, "wb") as log:
             proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=log, env=child_env)
         url.pid = proc.pid
+        url.log_path = log_path
         try:
             deadline = time.monotonic() + HEALTH_TIMEOUT_S
             while not _healthy(url):

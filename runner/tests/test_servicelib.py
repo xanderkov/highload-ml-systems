@@ -240,3 +240,14 @@ def test_service_cpus_takes_at_most_three():
 
     chosen = service_cpus(SERVICE)
     assert chosen <= SERVICE and len(chosen) == min(3, len(SERVICE))
+
+
+def test_service_stderr_tail_is_available(tmp_path):
+    app = tmp_path / "noisy_app.py"
+    app.write_text(
+        "import sys\nfrom fastapi import FastAPI\napp = FastAPI()\n"
+        "print('собственное сообщение сервиса', file=sys.stderr, flush=True)\n"
+        "@app.get('/health')\nasync def health():\n    return {}\n"
+    )
+    with start_service(str(app), cpus=SERVICE) as url:
+        assert "собственное сообщение сервиса" in url.stderr_tail()

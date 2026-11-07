@@ -32,12 +32,52 @@ def infer(x: torch.Tensor) -> torch.Tensor:
         return model(x)
 
 
+_reported: set[str] = set()
+
+
+def report(message: str) -> None:
+    """Сообщение в stderr сервиса — один раз: харнесс покажет его студенту."""
+    if message not in _reported:
+        _reported.add(message)
+        print(message, file=sys.stderr, flush=True)
+
+
+def fail_futures(items, exc: BaseException) -> None:
+    """Ответить ошибкой всем запросам, чьи future удаётся найти, — чтобы не ждали вечно."""
+    for item in items if isinstance(items, (list, tuple)) else ():
+        future = item[1] if isinstance(item, tuple) and len(item) == 2 else None
+        if isinstance(future, asyncio.Future) and not future.done():
+            future.set_exception(exc)
+
+
+def problem_with(items) -> str | None:
+    if not isinstance(items, list):
+        return f"collect_batch вернул {type(items).__name__}, а нужен list"
+    if not items:
+        return "collect_batch вернул пустой список, а батч должен содержать хотя бы один запрос"
+    if len(items) > MAX_BATCH_SIZE:
+        return f"collect_batch вернул {len(items)} элементов — больше max_batch_size = {MAX_BATCH_SIZE}"
+    if not all(isinstance(item, tuple) and len(item) == 2 for item in items):
+        return "collect_batch вернул не те элементы, что достал из очереди: их надо возвращать как есть"
+    return None
+
+
 async def batch_loop(queue: asyncio.Queue) -> None:
+    # Цикл не должен умирать: упавший батчер молча оставил бы все запросы ждать.
+    # Любая ошибка печатается в stderr (харнесс покажет его) и отдаётся
+    # запросам, которые удаётся найти.
     while True:
-        items = await batcher.collect_batch(queue, MAX_BATCH_SIZE, MAX_DELAY_S)
-        if not isinstance(items, list) or not items:
-            print(f"collect_batch вернул {type(items).__name__} длины "
-                  f"{len(items) if hasattr(items, '__len__') else '?'}, а нужен непустой list", file=sys.stderr)
+        try:
+            items = await batcher.collect_batch(queue, MAX_BATCH_SIZE, MAX_DELAY_S)
+        except Exception:  # noqa: BLE001
+            report("collect_batch бросил исключение:\n" + traceback.format_exc())
+            await asyncio.sleep(0.01)  # не крутиться вхолостую, если ошибка на каждом вызове
+            continue
+        problem = problem_with(items)
+        if problem:
+            report(problem)
+            fail_futures(items, RuntimeError(problem))
+            await asyncio.sleep(0.01)
             continue
         try:
             x = torch.stack([tensor for tensor, _ in items])
@@ -45,11 +85,9 @@ async def batch_loop(queue: asyncio.Queue) -> None:
             for (_, future), row in zip(items, out):
                 if not future.done():
                     future.set_result(row)
-        except Exception as exc:  # noqa: BLE001 — ответить всем, а не оставить их ждать
-            traceback.print_exc()
-            for _, future in items:
-                if not future.done():
-                    future.set_exception(exc)
+        except Exception as exc:  # noqa: BLE001
+            report("модель не посчитала батч:\n" + traceback.format_exc())
+            fail_futures(items, exc)
 
 
 @contextlib.asynccontextmanager

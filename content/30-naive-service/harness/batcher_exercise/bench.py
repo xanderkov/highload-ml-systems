@@ -41,7 +41,10 @@ REPEATS = int(os.environ.get("BENCH_REPEATS", "3"))
 WARMUP_RPS, WARMUP_S = 100, 0.5
 RARE_GAP_S, RARE_COUNT = 0.3, 5
 RARE_SLACK_MS = 200
-BUSY_WAIT_SHARE = 0.9
+# Доля одного CPU: цикл busy-wait занимает поток event loop целиком.
+BUSY_WAIT_CPU = 0.9
+# Запросов без ответа в замере (доля) — больше этого считается потерей.
+MAX_LOST_SHARE = 0.01
 INPUTS = 64
 CONTENT = "application/octet-stream"
 
@@ -49,6 +52,12 @@ CONTENT = "application/octet-stream"
 def fail(message: str) -> None:
     print(message, file=sys.stderr)
     sys.exit(1)
+
+
+def batcher_errors(url) -> str:
+    """Вывод сервиса, если в нём есть сообщение каркаса или трассировка, иначе ""."""
+    said = url.stderr_tail()
+    return said if "collect_batch" in said or "Traceback" in said else ""
 
 
 def main() -> None:
@@ -89,8 +98,11 @@ def main() -> None:
                 rare = servicelib.run_load(url, rps=1 / RARE_GAP_S, duration_s=RARE_GAP_S * RARE_COUNT,
                                            make_body=make_body, content_type=CONTENT, cpus=load_cpus,
                                            timeout_s=(MAX_DELAY_S * 1000 + RARE_SLACK_MS) / 1000 + 1)
-                share = (servicelib.cpu_seconds(url.pids()) - cpu_before) / (time.perf_counter() - started) / len(cpus)
+                busy = (servicelib.cpu_seconds(url.pids()) - cpu_before) / (time.perf_counter() - started)
                 limit_ms = MAX_DELAY_S * 1000 + RARE_SLACK_MS
+                said = batcher_errors(url)
+                if (rare.errors or rare.p99() > limit_ms) and said:
+                    fail(f"{who}: сервис не ответил на редкие запросы. Вот что он написал:\n{said}")
                 if rare.errors or rare.p99() > limit_ms:
                     fail(
                         f"{who}: при редких запросах (раз в {RARE_GAP_S * 1000:.0f} мс) ответ не пришёл "
@@ -98,13 +110,14 @@ def main() -> None:
                         f"не уходит, пока не наберётся max_batch_size = {MAX_BATCH_SIZE}: после первого элемента "
                         f"ждать остальных можно не дольше max_delay = {MAX_DELAY_S * 1000:.0f} мс"
                     )
-                if share > BUSY_WAIT_SHARE:
-                    print(f"{who}: при редких запросах сервис занимает {share:.0%} CPU — похоже на busy-wait "
+                if busy > BUSY_WAIT_CPU:
+                    print(f"{who}: при редких запросах сервис занимает {busy:.0%} одного CPU — похоже на busy-wait "
                           f"в collect_batch (цикл без await, который крутится вхолостую)", file=sys.stderr)
 
                 warm = servicelib.run_load(url, rps=WARMUP_RPS, duration_s=WARMUP_S, make_body=make_body,
                                            content_type=CONTENT, cpus=load_cpus)
                 wrong = wrong_answers(warm.responses)
+                lost = sent = 0
                 for _ in range(REPEATS):
                     try:
                         result = servicelib.run_load(url, rps=RPS, duration_s=DURATION_S, make_body=make_body,
@@ -114,19 +127,29 @@ def main() -> None:
                         result = servicelib.run_load(url, rps=RPS, duration_s=DURATION_S, make_body=make_body,
                                                      content_type=CONTENT, cpus=load_cpus, timeout_s=5)
                     wrong += wrong_answers(result.responses)
+                    lost += result.errors
+                    sent += len(result.responses)
                     p99[unit].append(result.p99() if result.latencies_ms else DURATION_S * 1000)
                     goodput[unit].append(result.goodput(SLO_MS))
                     print(f"{who}: {RPS} RPS — p50 {result.p50():.1f} мс, p99 {result.p99():.1f} мс, "
                           f"goodput {result.goodput(SLO_MS):.0f}/с при SLO {SLO_MS} мс, ошибок {result.errors}",
                           file=sys.stderr)
+                said = batcher_errors(url)
         except servicelib.ServiceStartError as exc:
             fail(f"{who}: {exc}")
         except servicelib.LoadGeneratorLagging as exc:
-            fail(f"{who}: {exc}")
+            fail(f"{who}: генератор нагрузки не успел отправить запросы по расписанию — "
+                 f"скорее всего, машина занята другими процессами; запустите ещё раз ({exc})")
         if wrong:
             print(f"{who}: {wrong} ответов не совпали с выходом модели для своего входа — "
-                  f"элементы батча перепутаны или потеряны", file=sys.stderr)
-        check[unit] = math.nan if wrong else 1.0
+                  f"элементы батча перепутаны", file=sys.stderr)
+        too_many_lost = lost > MAX_LOST_SHARE * sent
+        if too_many_lost:
+            print(f"{who}: {lost} запросов из {sent} остались без ответа за 5 с — collect_batch "
+                  f"забирает их из очереди и не возвращает", file=sys.stderr)
+        if (wrong or too_many_lost) and said:
+            print(f"{who}: сервис написал в stderr:\n{said}", file=sys.stderr)
+        check[unit] = math.nan if wrong or too_many_lost else 1.0
 
     base = max(statistics.median(goodput["a"]), 1 / DURATION_S)
     metrics = {
