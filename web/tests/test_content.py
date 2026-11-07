@@ -3,8 +3,8 @@ import pytest
 from app.content import ContentError, list_sections, load_section
 
 SECTION = """---
-id: cpu-cache
-title: Кэш процессора
+id: python-runtime
+title: Python как рантайм сервиса
 order: 10
 ---
 
@@ -20,12 +20,12 @@ def write_section(root, name, text):
 
 
 def test_load_section_reads_frontmatter(tmp_path):
-    directory = write_section(tmp_path, "01-cpu-cache", SECTION)
+    directory = write_section(tmp_path, "20-python-runtime", SECTION)
 
     section = load_section(directory)
 
-    assert section.id == "cpu-cache"
-    assert section.title == "Кэш процессора"
+    assert section.id == "python-runtime"
+    assert section.title == "Python как рантайм сервиса"
     assert section.order == 10
     assert section.draft is False
     assert section.body.strip() == "Текст раздела."

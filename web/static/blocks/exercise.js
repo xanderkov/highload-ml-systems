@@ -1,6 +1,5 @@
 import { run } from "../api.js";
 import { isDone, markDone } from "../progress.js";
-import { mountIndexTutorial } from "./index-tutorial.js";
 import {
   escapeHtml,
   formatMs,
@@ -20,13 +19,12 @@ export function mount(element, { sectionId, blockId, lang, params }) {
       <span class="status">не запускалось</span>
     </div>
     <h3 class="block-title">${escapeHtml(params.title)}</h3>
-    <p class="block-goal${params.hide_target || params.guided ? " is-veiled" : ""}"><code>${escapeHtml(
+    <p class="block-goal${params.hide_target ? " is-veiled" : ""}"><code>${escapeHtml(
       params.target
     )}</code></p>
-    ${params.guided ? '<p class="step" aria-live="polite"></p>' : ""}
     <div class="editor"></div>
     <div class="controls">
-      <button class="run" type="button">${params.guided ? "Замерить" : "Проверить"}</button>
+      <button class="run" type="button">Проверить</button>
       <button class="reset" type="button">Вернуть исходный код</button>
     </div>
     <div class="result" aria-live="polite"></div>`;
@@ -44,7 +42,6 @@ export function mount(element, { sectionId, blockId, lang, params }) {
     showPrintMargin: false,
     useSoftTabs: true,
     tabSize: 4,
-    readOnly: Boolean(params.guided),
   });
 
   // Порог задания можно спрятать до первого запуска (hide_target). Нужен он
@@ -52,27 +49,14 @@ export function mount(element, { sectionId, blockId, lang, params }) {
   // «нужно ускорить втрое» выдала бы развязку раньше, чем он успел замерить.
   const goal = element.querySelector(".block-goal");
 
-  // Стенд (guided): редактор заперт, пока не сделан первый замер, вердикта нет
-  // вовсе, а замеры копятся списком. Вывод о разнице делает студент, глядя на
-  // два числа, — не плашка, которая объявляет ему результат.
-  const step = element.querySelector(".step");
-  const runs = [];
-  if (params.guided) {
-    element.classList.add("is-locked");
-    if (step) step.textContent = params.hint_start || "";
-  }
-
   const result = element.querySelector(".result");
   const button = element.querySelector(".run");
   const status = element.querySelector(".status");
-  const tutorial = params.tutorial === "index-swap"
-    ? mountIndexTutorial(element, editor, starter)
-    : null;
 
   function setDone() {
     element.classList.add("is-done");
     element.classList.remove("is-failed");
-    status.textContent = params.guided ? `замеров: ${runs.length}` : "готово";
+    status.textContent = "готово";
   }
 
   if (isDone(sectionId, blockId)) setDone();
@@ -83,35 +67,22 @@ export function mount(element, { sectionId, blockId, lang, params }) {
   });
 
   button.addEventListener("click", async () => {
-    tutorial?.running();
     button.disabled = true;
     result.className = "result is-running";
     result.textContent = "Замеряем…";
     status.textContent = "замеряем";
     try {
       const data = await run(sectionId, blockId, editor.getValue());
-      if (!params.guided) goal.classList.remove("is-veiled");
+      goal.classList.remove("is-veiled");
       result.className = "result";
-      if (params.guided && data.status === "ok") {
-        runs.push({ ms: data.student_ms, spread: data.spread_pct, correct: data.correct });
-        if (data.correct && runs.filter((entry) => entry.correct).length === 1) {
-          editor.setReadOnly(false);
-          element.classList.remove("is-locked");
-          if (step) step.textContent = params.hint_next || "";
-        }
-      }
-      result.innerHTML = params.guided ? renderRuns(runs, data) : render(data, params);
+      result.innerHTML = render(data, params);
       highlightCompileError(editor, data);
-      tutorial?.settled(data);
       if (data.passed) {
         markDone(sectionId, blockId);
         setDone();
       } else {
         element.classList.toggle("is-failed", data.status !== "ok" || !data.correct);
-        status.textContent =
-          params.guided && data.status === "ok"
-            ? `замеров: ${runs.length}`
-            : statusLabel(data);
+        status.textContent = statusLabel(data);
       }
     } catch (error) {
       result.className = "result";
@@ -119,9 +90,8 @@ export function mount(element, { sectionId, blockId, lang, params }) {
         error.message || error
       )}</p>`;
       status.textContent = "сбой сервиса";
-      tutorial?.settled({ status: "service_error" });
     } finally {
-      button.disabled = tutorial?.blocksRun() ?? false;
+      button.disabled = false;
     }
   });
 }
@@ -199,21 +169,6 @@ function correctness(correct) {
   return correct
     ? '<span class="check-result is-match">✓ Результат совпадает с ожидаемым</span>'
     : '<span class="check-result is-mismatch">✕ Результат не совпадает с ожидаемым</span>';
-}
-
-/** Keep every completed measurement, including incorrect results. */
-function renderRuns(runs, data) {
-  const problem = renderProblem(data);
-
-  const rows = runs
-    .map(
-      (entry, index) =>
-        `<tr><td>замер ${index + 1}</td><td>${formatMs(entry.ms)}</td>` +
-        `<td>разброс ${entry.spread.toFixed(1)} %</td><td>${correctness(entry.correct)}</td></tr>`
-    )
-    .join("");
-
-  return `${rows ? `<table class="numbers runs">${rows}</table>` : ""}${problem || ""}${renderCompileCommand(data)}`;
 }
 
 /** Плашка зачёта: единственная сплошная заливка и единственная смена

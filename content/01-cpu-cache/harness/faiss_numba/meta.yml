@@ -1,9 +1,0 @@
-kind: ab
-lang: python
-function: compute
-sizes: [262144]
-warmup: 2
-repeats: 9
-timeout_s: 90
-memory_mb: 2048
-tolerance: 0

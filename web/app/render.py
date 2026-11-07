@@ -12,7 +12,7 @@ from app.content import Block, ContentError, Section
 # выполнить» — любой job идёт по A/B-пути, где bench.c объявляет extern fn_b,
 # так что один юнит не слинкуется, а ошибку компиляции нельзя было бы
 # привязать к строке (студенческим считается только юнит "b").
-BLOCK_KINDS = {"viz", "benchmark", "exercise", "experiment"}
+BLOCK_KINDS = {"viz", "benchmark", "exercise"}
 EXT = {"c": "c", "python": "py"}
 VIZ_DIR = Path(__file__).resolve().parent.parent / "static" / "viz"
 
@@ -92,13 +92,6 @@ def _build_block(section: Section, info: str, body: str) -> Block:
             raise ContentError(
                 f"{section.dir / 'section.md'}: для viz {attrs['id']} нет модуля static/viz/{attrs['id']}.js"
             )
-
-    if kind == "experiment":
-        for field in ("title", "starter", "harness"):
-            if field not in params:
-                raise ContentError(f"{section.dir / 'section.md'}: experiment {attrs['id']} без поля {field}")
-        _require_harness(section, params["harness"])
-        params["starter_code"] = _require_file(section, params["starter"], "starter")
 
     if kind == "exercise":
         for field in ("title", "target", "starter", "reference", "harness"):

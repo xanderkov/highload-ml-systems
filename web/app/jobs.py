@@ -1,7 +1,6 @@
 import re
 
 from app.content import Block, ContentError, Section
-from app.experiments import prepare_units
 
 # Цель задания разбирается один раз здесь. Метрики не перечисляются: любая
 # \w+ годится, а есть ли она у харнесса, проверяет runner (нет метрики —
@@ -44,7 +43,7 @@ def build_job(section: Section, block: Block, code: str, variant: int | None = N
     (его отсутствие там KeyError), `mode` читается всегда, `target` — только
     при mode == "exercise".
     """
-    if block.kind not in ("exercise", "benchmark", "experiment"):
+    if block.kind not in ("exercise", "benchmark"):
         raise ContentError(f"Блок {block.kind} {block.id} не запускается")
 
     harness = block.params.get("harness")
@@ -54,18 +53,12 @@ def build_job(section: Section, block: Block, code: str, variant: int | None = N
     job = {
         "mode": block.kind,
         "lang": block.lang,
-        # Имя папки, а не section.id: папка несёт префикс порядка (01-cpu-cache),
+        # Имя папки, а не section.id: папка несёт префикс порядка (20-python-runtime),
         # и именно от него runner резолвит путь внутри своего CONTENT_ROOT.
         # Путь относительный, потому что контент смонтирован в двух сервисах
         # по разным абсолютным путям (/app/content и /content).
         "harness_dir": f"{section.dir.name}/harness/{harness}",
     }
-
-    if block.kind == "experiment":
-        job["mode"] = "benchmark"
-        job["units"], job["gap_bytes"] = prepare_units(block.params["starter_code"], code)
-        job["target"] = None
-        return job
 
     if block.kind == "exercise":
         # baseline ("a") — стартовый код: ускорение считается относительно

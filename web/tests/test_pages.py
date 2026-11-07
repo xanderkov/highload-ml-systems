@@ -41,7 +41,7 @@ def test_page_loads_versioned_styles_and_nested_modules(client):
     response = client.get("/section/demo")
     for asset in ["style.css", "app.js"]:
         assert f'{main.ASSET_PREFIX}/{asset}' in response.text
-    for asset in ["style.css", "app.js", "blocks/exercise.js", "blocks/index-tutorial.js"]:
+    for asset in ["style.css", "app.js", "blocks/exercise.js", "blocks/benchmark.js"]:
         assert client.get(f"{main.ASSET_PREFIX}/{asset}").status_code == 200
 
 

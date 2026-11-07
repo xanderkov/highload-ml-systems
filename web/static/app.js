@@ -6,7 +6,6 @@ import { isDone } from "./progress.js";
 const BLOCK_MODULES = {
   exercise: "./blocks/exercise.js",
   benchmark: "./blocks/benchmark.js",
-  experiment: "./blocks/experiment.js",
 };
 
 function moduleUrl(element) {

@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-URL="${1:-http://localhost:18080/section/cpu-cache}"
+URL="${1:-http://localhost:18080/section/python-runtime}"
 
 CHROME=""
 for candidate in \

@@ -179,8 +179,4 @@ def api_run(payload: RunRequest) -> dict:
             ),
             "log": response.text[:4000],
         }
-    result = response.json()
-    if block.kind == "experiment" and result.get("status") == "ok":
-        result["gap_bytes"] = job["gap_bytes"]
-        result["slowdown"] = result["student_ms"] / result["baseline_ms"] if result["baseline_ms"] > 0 else None
-    return result
+    return response.json()
