@@ -269,3 +269,19 @@
   display: block;
   overflow-x: auto;
 }
+
+/* uPlot: шрифт и цвета легенды — страницы, числа — моноширинные. */
+.block-card .uplot {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+}
+.block-card .u-legend {
+  font-size: 0.8125rem;
+}
+.block-card .u-legend th {
+  font-weight: 500;
+}
+.block-card .u-legend .u-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
