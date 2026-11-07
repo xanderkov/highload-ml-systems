@@ -4,36 +4,44 @@ import {
   escapeHtml,
   formatMs,
   formatSpeedup,
+  renderFault,
+  renderLog,
   renderProblem,
   statusLabel,
 } from "../result.js";
+import { aceTheme } from "../theme.js";
 
-const LANG_LABEL = { python: "Python" };
+// Задание: редактор со стартовым кодом, кнопка «Проверить» и результат.
+// Состояние карточки — data-state (idle | running | pass | fail | error);
+// цвета состояний описаны в app.css (.block-card, .status-badge), поэтому
+// здесь нет ни одного класса, собранного из кусков строки.
 
-export function mount(element, { sectionId, blockId, lang, params }) {
-  element.classList.add("exercise");
+const RUN_LABEL = "Проверить";
+
+export function mount(element, { sectionId, blockId, params }) {
+  const number = [...document.querySelectorAll('.block[data-kind="exercise"]')].indexOf(element) + 1;
+  element.classList.add("exercise", "block-card");
+  element.dataset.state = "idle";
   element.innerHTML = `
     <div class="block-head">
-      <span>${escapeHtml(LANG_LABEL[lang] || lang || "")}</span>
-      <span class="status">не запускалось</span>
+      <span class="font-semibold text-ink">Задание${number > 0 ? ` ${number}` : ""}</span>
+      <span class="status status-badge">не запускалось</span>
     </div>
-    <h3 class="block-title">${escapeHtml(params.title)}</h3>
-    <p class="block-goal${params.hide_target ? " is-veiled" : ""}"><code>${escapeHtml(
-      params.target
-    )}</code></p>
-    <div class="editor"></div>
-    <div class="controls">
-      <button class="run" type="button">Проверить</button>
-      <button class="reset" type="button">Вернуть исходный код</button>
+    <div class="px-5 pt-4">
+      <h3 class="text-lg leading-snug font-semibold text-ink">${escapeHtml(params.title)}</h3>
+      <p class="mt-1 text-sm text-muted">Цель: <code class="font-mono text-ink">${escapeHtml(params.target)}</code></p>
     </div>
-    <div class="result" aria-live="polite"></div>`;
+    <div class="editor mx-5 mt-4 rounded-md border border-line"></div>
+    <div class="flex flex-wrap items-center gap-2 px-5 py-4">
+      <button class="run btn btn-primary" type="button">${RUN_LABEL}</button>
+      <button class="reset btn" type="button">Вернуть исходный код</button>
+    </div>
+    <div class="result px-5 pb-5 empty:hidden" aria-live="polite"></div>`;
 
   const starter = params.starter_code || "";
   const editor = ace.edit(element.querySelector(".editor"), {
     mode: "ace/mode/python",
-    // Тема страницы одна, тёмная — редактор не должен зависеть от системной
-    // настройки, иначе на светлой системе он вылезал бы белым пятном.
-    theme: "ace/theme/github_dark",
+    theme: aceTheme(),
     value: starter,
     minLines: 12,
     maxLines: 40,
@@ -42,23 +50,18 @@ export function mount(element, { sectionId, blockId, lang, params }) {
     useSoftTabs: true,
     tabSize: 4,
   });
-
-  // Порог задания можно спрятать до первого запуска (hide_target). Нужен он
-  // там, где смысл упражнения — дать студенту самому увидеть разницу: строка
-  // «нужно ускорить втрое» выдала бы развязку раньше, чем он успел замерить.
-  const goal = element.querySelector(".block-goal");
+  document.addEventListener("course:theme", () => editor.setTheme(aceTheme()));
 
   const result = element.querySelector(".result");
   const button = element.querySelector(".run");
   const status = element.querySelector(".status");
 
-  function setDone() {
-    element.classList.add("is-done");
-    element.classList.remove("is-failed");
-    status.textContent = "готово";
-  }
+  const setState = (state, label) => {
+    element.dataset.state = state;
+    status.textContent = label;
+  };
 
-  if (isDone(sectionId, blockId)) setDone();
+  if (isDone(sectionId, blockId)) setState("pass", "зачтено");
 
   element.querySelector(".reset").addEventListener("click", () => {
     editor.setValue(starter, -1);
@@ -67,29 +70,26 @@ export function mount(element, { sectionId, blockId, lang, params }) {
 
   button.addEventListener("click", async () => {
     button.disabled = true;
-    result.className = "result is-running";
-    result.textContent = "Замеряем…";
-    status.textContent = "замеряем";
+    button.innerHTML = '<span class="spinner" aria-hidden="true"></span> Выполняется…';
+    setState("running", "выполняется");
+    result.innerHTML = "";
     try {
       const data = await run(sectionId, blockId, editor.getValue());
-      goal.classList.remove("is-veiled");
-      result.className = "result";
       result.innerHTML = render(data, params);
       if (data.passed) {
         markDone(sectionId, blockId);
-        setDone();
+        setState("pass", "зачтено");
+      } else if (data.status !== "ok") {
+        setState("error", statusLabel(data));
       } else {
-        element.classList.toggle("is-failed", data.status !== "ok" || !data.correct);
-        status.textContent = statusLabel(data);
+        setState("fail", statusLabel(data));
       }
     } catch (error) {
-      result.className = "result";
-      result.innerHTML = `<p class="fault">Не получилось запустить: ${escapeHtml(
-        error.message || error
-      )}</p>`;
-      status.textContent = "сбой сервиса";
+      result.innerHTML = renderFault(error);
+      setState("error", "сбой сервиса");
     } finally {
       button.disabled = false;
+      button.textContent = RUN_LABEL;
     }
   });
 }
@@ -118,89 +118,89 @@ function formatMetric(value) {
     : "—";
 }
 
-function metricRows(data) {
-  const cell = (metrics) =>
-    Object.entries(metrics || {})
-      .map(([name, value]) => `${escapeHtml(name)} = ${formatMetric(value)}`)
-      .join(", ");
-  return `<tr><td>стартовый код</td><td>${cell(data.baseline_metrics)}</td></tr>
-      <tr><td>ваш код</td><td>${cell(data.metrics)}</td><td>${correctness(data.correct)}</td></tr>`;
+function correctness(correct) {
+  return correct
+    ? '<span class="text-good">✓ совпадает с ожидаемым</span>'
+    : '<span class="text-bad">✕ не совпадает с ожидаемым</span>';
+}
+
+function row(label, value, extra = "") {
+  return `<tr class="border-t border-line">
+      <td class="py-1.5 pr-4 text-muted">${label}</td>
+      <td class="py-1.5 pr-4 font-mono text-ink tabular-nums">${value}</td>
+      <td class="py-1.5">${extra}</td>
+    </tr>`;
+}
+
+function numbers(rows) {
+  return `<div class="mt-4 overflow-x-auto"><table class="w-full text-sm">${rows.join("")}</table></div>`;
+}
+
+function metricCell(metrics) {
+  return Object.entries(metrics || {})
+    .map(([name, value]) => `${escapeHtml(name)} = ${formatMetric(value)}`)
+    .join(", ");
 }
 
 function render(data, params) {
   const problem = renderProblem(data);
   if (problem) return problem;
 
+  const spread = row("разброс замеров", `${data.spread_pct.toFixed(1)} %`);
   if (isCustomMetric(params)) {
-    return `${verdict(data, params)}
-    <table class="numbers">
-      ${metricRows(data)}
-      <tr><td>время, стартовый код</td><td>${formatMs(data.baseline_ms)}</td></tr>
-      <tr><td>время, ваш код</td><td>${formatMs(data.student_ms)}</td></tr>
-      <tr><td>разброс замеров</td><td>${data.spread_pct.toFixed(1)} %</td></tr>
-    </table>`;
+    return `${verdict(data, params)}${numbers([
+      row("стартовый код", metricCell(data.baseline_metrics)),
+      row("ваш код", metricCell(data.metrics), correctness(data.correct)),
+      row("время, стартовый код", formatMs(data.baseline_ms)),
+      row("время, ваш код", formatMs(data.student_ms)),
+      spread,
+    ])}`;
   }
-
-  return `${verdict(data, params)}
-    <table class="numbers">
-      <tr><td>стартовый код</td><td>${formatMs(data.baseline_ms)}</td></tr>
-      <tr><td>ваш код</td><td>${formatMs(data.student_ms)}</td><td>${correctness(data.correct)}</td></tr>
-      <tr><td>ускорение</td><td>${formatSpeedup(data.speedup)}</td></tr>
-      <tr><td>разброс замеров</td><td>${data.spread_pct.toFixed(1)} %</td></tr>
-    </table>`;
+  return `${verdict(data, params)}${numbers([
+    row("стартовый код", formatMs(data.baseline_ms)),
+    row("ваш код", formatMs(data.student_ms), correctness(data.correct)),
+    row("ускорение", formatSpeedup(data.speedup)),
+    spread,
+  ])}`;
 }
 
-function correctness(correct) {
-  return correct
-    ? '<span class="check-result is-match">✓ Результат совпадает с ожидаемым</span>'
-    : '<span class="check-result is-mismatch">✕ Результат не совпадает с ожидаемым</span>';
-}
-
-/** Плашка зачёта: единственная сплошная заливка и единственная смена
-    полярности на странице. Полоса сравнивает результат с порогом. */
+/** Зачёт: крупное число и полоса «порог → результат». */
 function passBand(data, params) {
   if (isCustomMetric(params)) return metricBand(data, params);
   const threshold = thresholdOf(params.target);
   const speedup = data.speedup;
-  const margin =
-    threshold && Number.isFinite(speedup) ? (speedup / threshold).toFixed(1) : null;
+  const margin = threshold && Number.isFinite(speedup) ? (speedup / threshold).toFixed(1) : null;
 
   // Запас ограничен сверху, иначе при ускорении в сотни раз полоса порога
   // схлопывается в невидимую нить и сравнивать становится не с чем.
-  const track = threshold || 1;
   const over = threshold ? Math.min(Math.max(speedup - threshold, 0), threshold * 11) : 0;
-
   const bar = threshold
-    ? `<div class="verdict-bar">
-         <span class="track" style="flex: ${track}"></span>
-         <span class="fill" style="flex: ${over || 0.001}"></span>
+    ? `<div class="mt-4 flex h-1.5 overflow-hidden rounded-full bg-surface">
+         <span class="bg-line" style="flex: ${threshold}"></span>
+         <span class="bg-good" style="flex: ${over || 0.001}"></span>
        </div>
-       <div class="verdict-scale"><span>порог ${threshold}×</span><span>ваш результат</span></div>`
+       <div class="mt-1 flex justify-between text-xs text-muted"><span>порог ${threshold}×</span><span>ваш результат</span></div>`
     : "";
 
-  return `<div class="verdict">
-      <div class="verdict-row">
-        <div class="verdict-num">${formatSpeedup(speedup)}</div>
-        <div>
-          <div class="verdict-word">быстрее стартового кода</div>
-          ${margin ? `<div class="verdict-meta">порог ${threshold}× · запас ${margin}×</div>` : ""}
-        </div>
+  return `<div class="flex flex-wrap items-end gap-x-5 gap-y-1">
+      <div class="font-mono text-4xl font-bold text-good tabular-nums">${formatSpeedup(speedup)}</div>
+      <div class="pb-1 text-sm">
+        <div class="font-medium text-ink">быстрее стартового кода</div>
+        ${margin ? `<div class="text-muted">порог ${threshold}× · запас ${margin}×</div>` : ""}
       </div>
-      ${bar}
-    </div>`;
+    </div>
+    ${bar}`;
 }
 
-/** Плашка зачёта для метрики, отличной от ускорения: значение и порог. */
+/** Зачёт для метрики, отличной от ускорения: значение и порог. */
 function metricBand(data, params) {
   const { metric, op, value } = parseTarget(params.target);
   const actual = (data.metrics || {})[metric];
-  return `<div class="verdict">
-      <div class="verdict-row">
-        <div class="verdict-num">${formatMetric(actual)}</div>
-        <div>
-          <div class="verdict-word">${escapeHtml(metric)} = ${formatMetric(actual)}</div>
-          <div class="verdict-meta">порог ${escapeHtml(op)} ${value}</div>
-        </div>
+  return `<div class="flex flex-wrap items-end gap-x-5 gap-y-1">
+      <div class="font-mono text-4xl font-bold text-good tabular-nums">${formatMetric(actual)}</div>
+      <div class="pb-1 text-sm">
+        <div class="font-medium text-ink">${escapeHtml(metric)}</div>
+        <div class="text-muted">порог ${escapeHtml(op)} ${value}</div>
       </div>
     </div>`;
 }
@@ -210,9 +210,9 @@ function metricBand(data, params) {
 function diagnostics(data) {
   const text = typeof data.stderr === "string" ? data.stderr.trim() : "";
   if (!text) return "";
-  return `<details class="harness-log" open>
-    <summary>Что сообщила проверка</summary>
-    <pre>${escapeHtml(text)}</pre>
+  return `<details class="harness-log mt-3" open>
+    <summary class="cursor-pointer text-sm font-medium text-ink">Что сообщила проверка</summary>
+    ${renderLog(text)}
   </details>`;
 }
 
@@ -220,7 +220,7 @@ function verdict(data, params) {
   if (data.passed) return passBand(data, params);
 
   if (data.correct === false) {
-    return `<p class="bad">Результат разошёлся со стартовым кодом — оптимизация что-то сломала.</p>${diagnostics(data)}`;
+    return `<p class="font-medium text-bad">Результат разошёлся со стартовым кодом — оптимизация что-то сломала.</p>${diagnostics(data)}`;
   }
 
   // Код верен, но порог не взят. Это не ошибка, а недобор, и выглядеть он
@@ -228,7 +228,7 @@ function verdict(data, params) {
   const got = isCustomMetric(params)
     ? formatMetric((data.metrics || {})[parseTarget(params.target).metric])
     : formatSpeedup(data.speedup);
-  return `<p class="warn">Не хватило: нужно <code>${escapeHtml(
+  return `<p class="font-medium text-warn">Не хватило: нужно <code class="font-mono">${escapeHtml(
     params.target
-  )}</code>, получилось ${got}.</p>`;
+  )}</code>, получилось <span class="font-mono">${got}</span>.</p>`;
 }

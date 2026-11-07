@@ -57,3 +57,23 @@ export function mountThemeToggle() {
     if (choice === "system") document.dispatchEvent(new CustomEvent("course:theme"));
   });
 }
+
+/** Тема Ace под текущую тему страницы. */
+export function aceTheme() {
+  return isDark() ? "ace/theme/github_dark" : "ace/theme/github";
+}
+
+/** Значение CSS-переменной страницы (токена из app.css). */
+export function cssVar(name, fallback = "") {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+}
+
+/** Цвета графиков из токенов: серии по порядку, сетка, подписи осей. */
+export function chartColors() {
+  return {
+    series: [1, 2, 3, 4, 5].map((n) => cssVar(`--color-series-${n}`, "#4f46e5")),
+    grid: cssVar("--color-line", "#e2e8f0"),
+    axis: cssVar("--color-muted", "#64748b"),
+  };
+}

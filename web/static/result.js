@@ -38,22 +38,30 @@ export function renderProblem(data) {
   if (data.status === "ok") return null;
 
   const message = escapeHtml(data.message || FALLBACK_MESSAGE[data.status] || data.status);
-  // Полоса слева различает исходы светлотой, а пунктиром — «прервано по
-  // таймауту»: это не сломанный код, а не дождавшийся своего конца прогон.
-  const timedOut = data.status === "timeout";
-  const kind =
-    (data.status === "service_error" ? "fault" : "bad") + (timedOut ? " is-timeout" : "");
-
   if (data.status === "unsupported_lang" || data.status === "unsupported_kind") {
     // Это не ошибка студента: блок объявлен неправильно в материалах курса.
-    return `<p class="fault">${message}</p><p class="hint">Это ошибка в материалах курса, а не в вашем коде.</p>`;
+    return `<p class="font-medium text-bad">${message}</p>
+      <p class="mt-1 text-sm text-muted">Это ошибка в материалах курса, а не в вашем коде.</p>`;
   }
-  return `<p class="${kind}">${message}</p>${logOf(data)}`;
+  if (data.status === "service_error") {
+    return `<p class="font-medium text-ink">${message}</p>${logOf(data)}`;
+  }
+  return `<p class="font-medium text-bad">${message}</p>${logOf(data)}`;
+}
+
+/** Трассировка или лог: моноширинно, с прокруткой внутри блока. */
+export function renderLog(text) {
+  return `<pre class="mt-3 max-h-96 overflow-auto rounded-md border border-line bg-surface p-3 font-mono text-xs leading-relaxed text-ink">${escapeHtml(text)}</pre>`;
 }
 
 function logOf(data) {
   // У статуса timeout лога нет вовсе — процесс убит, показывать нечего.
-  return data.log ? `<pre class="log">${escapeHtml(data.log)}</pre>` : "";
+  return data.log ? renderLog(data.log) : "";
+}
+
+/** Ошибка сети или прокси: до runner'а запрос не дошёл. */
+export function renderFault(error) {
+  return `<p class="font-medium text-bad">Не получилось запустить: ${escapeHtml(error?.message || error)}</p>`;
 }
 
 // Короткая метка исхода для шапки блока. Различение трёхуровневое: успех,

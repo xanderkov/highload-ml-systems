@@ -152,6 +152,81 @@
     border-radius: 0.5rem;
     background: var(--color-page);
   }
+
+  /* Интерактивный блок (задание, замер). Состояние — атрибут data-state,
+     который ставит JS: idle | running | pass | fail | error. */
+  .block-card {
+    margin-block: 2rem;
+    border: 1px solid var(--color-line);
+    border-radius: 0.5rem;
+    background: var(--color-page);
+    overflow: hidden;
+    transition: border-color 150ms;
+  }
+  .block-card[data-state="pass"] {
+    border-color: var(--color-good);
+  }
+  .block-card[data-state="error"] {
+    border-color: var(--color-bad);
+  }
+  .block-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-bottom: 1px solid var(--color-line);
+    background: var(--color-surface);
+    padding: 0.55rem 1.25rem;
+    font-size: 0.8125rem;
+  }
+  .status-badge {
+    flex-shrink: 0;
+    border: 1px solid var(--color-line);
+    border-radius: 9999px;
+    padding: 0.05rem 0.6rem;
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    background: var(--color-page);
+  }
+  [data-state="pass"] .status-badge {
+    border-color: var(--color-good);
+    color: var(--color-good);
+  }
+  [data-state="fail"] .status-badge {
+    border-color: var(--color-warn);
+    color: var(--color-warn);
+  }
+  [data-state="error"] .status-badge {
+    border-color: var(--color-bad);
+    color: var(--color-bad);
+  }
+  [data-state="running"] .status-badge {
+    color: var(--color-accent);
+  }
+  .spinner {
+    display: inline-block;
+    width: 0.9em;
+    height: 0.9em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 9999px;
+    animation: spin 0.8s linear infinite;
+  }
+}
+
+/* Ace подставляет фон темы своим CSS при загрузке темы. Поверх — фон и
+   шрифт страницы, чтобы редактор не выпадал из карточки ни в одной теме.
+   Селекторы длиннее, чем у Ace (.ace-github .ace_gutter), — иначе его стиль,
+   вставленный позже, победил бы. */
+.block-card .editor.ace_editor,
+.block-card .editor .ace_gutter {
+  background: var(--color-surface);
+}
+.block-card .editor.ace_editor {
+  font-family: var(--font-mono);
+}
+.block-card .editor .ace_gutter {
+  color: var(--color-muted);
 }
 
 /* Проза статьи: цвета typography берутся из токенов, поэтому тёмная тема
