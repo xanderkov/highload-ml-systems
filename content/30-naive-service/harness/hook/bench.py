@@ -19,11 +19,8 @@ C ≈ 450) с округлением. Выше харнесс прямо гов�
 быстрая, а не рисует сомнительный замер. Отставание на любой ступени ловит и
 сам run_load (LoadGeneratorLagging).
 """
-import http.client
 import json
-import os
 import sys
-import threading
 import time
 from pathlib import Path
 
@@ -41,47 +38,6 @@ WARMUP_RPS = 20
 WARMUP_S = 1.0
 PROBE_CONNECTIONS = 4
 PROBE_S = 1.5
-
-
-def probe_capacity(url: str, body: bytes, cpus: set[int]) -> float:
-    """Ответов в секунду при постоянной очереди: закрытый цикл в несколько соединений."""
-    host, port = url.split("://", 1)[1].rsplit(":", 1)
-    done = [0] * PROBE_CONNECTIONS
-    failed = []
-    deadline = time.perf_counter() + PROBE_S
-
-    def client(k: int) -> None:
-        conn = http.client.HTTPConnection(host, int(port), timeout=10)
-        try:
-            while time.perf_counter() < deadline:
-                conn.request("POST", "/predict", body, {"Content-Type": "application/json"})
-                response = conn.getresponse()
-                response.read()
-                if response.status != 200:
-                    failed.append(response.status)
-                    return
-                done[k] += 1
-        except OSError as exc:
-            failed.append(exc)
-        finally:
-            conn.close()
-
-    # Потоки наследуют привязку создающего потока: клиенты работают на CPU генератора.
-    old = os.sched_getaffinity(0)
-    os.sched_setaffinity(0, cpus)
-    try:
-        started = time.perf_counter()
-        threads = [threading.Thread(target=client, args=(k,)) for k in range(PROBE_CONNECTIONS)]
-        for t in threads:
-            t.start()
-    finally:
-        os.sched_setaffinity(0, old)
-    for t in threads:
-        t.join()
-    if failed:
-        print(f"замер ёмкости: сервис ответил ошибкой: {failed[0]}", file=sys.stderr)
-        sys.exit(1)
-    return sum(done) / (time.perf_counter() - started)
 
 
 def main() -> None:
@@ -123,7 +79,12 @@ def main() -> None:
             print("ответ сервиса не совпадает с выходом модели для этого изображения", file=sys.stderr)
             sys.exit(1)
 
-        capacity = probe_capacity(url, body, load_cpus)
+        try:
+            capacity = servicelib.probe_capacity(url, body, "application/json", cpus=load_cpus,
+                                                 connections=PROBE_CONNECTIONS, seconds=PROBE_S)
+        except RuntimeError as exc:
+            print(exc, file=sys.stderr)
+            sys.exit(1)
         steps = [max(10, round(capacity * f / 10) * 10) for f in UNDER_FRACTIONS]
         steps += [round(capacity / 10) * 10 + extra for extra in OVERLOAD_RPS]
         print(f"ёмкость сервиса C ≈ {capacity:.0f} ответов/с; ступени {steps} RPS", file=sys.stderr)

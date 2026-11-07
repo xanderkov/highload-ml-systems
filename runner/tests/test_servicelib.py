@@ -29,6 +29,11 @@ def fast_app():
 
 
 @pytest.fixture
+def broken_status_app():
+    return str(APPS / "svc_500_app.py")
+
+
+@pytest.fixture
 def slow_app():
     return str(APPS / "svc_slow_app.py")
 
@@ -211,3 +216,27 @@ def test_health_check_ignores_proxy_env(fast_app, monkeypatch):
     monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:9")
     with start_service(fast_app, cpus=SERVICE) as url:
         assert url.startswith("http://127.0.0.1:")
+
+
+def test_probe_capacity_of_serial_service(slow_app):
+    from servicelib import probe_capacity
+
+    # 200 мс на ответ без конкурентности: ёмкость около 5 ответов в секунду,
+    # сколько бы соединений ни ждало в очереди.
+    with start_service(slow_app, cpus=SERVICE) as url:
+        capacity = probe_capacity(url, b"x", OCTET, cpus=LOAD, connections=4, seconds=1.5)
+    assert 3.5 < capacity < 6
+
+
+def test_probe_capacity_reports_http_errors(broken_status_app):
+    from servicelib import probe_capacity
+
+    with start_service(broken_status_app, cpus=SERVICE) as url, pytest.raises(RuntimeError, match="500"):
+        probe_capacity(url, b"x", OCTET, cpus=LOAD, seconds=0.3)
+
+
+def test_service_cpus_takes_at_most_three():
+    from servicelib import service_cpus
+
+    chosen = service_cpus(SERVICE)
+    assert chosen <= SERVICE and len(chosen) == min(3, len(SERVICE))

@@ -319,3 +319,20 @@ def test_outline_has_subheadings(tmp_path):
     for sub in subs + parts[1]["subs"]:
         assert f'id="{sub["id"]}"' in html
     assert parts[1]["subs"][0]["id"] == subs[0]["id"] + "-2"
+
+
+def test_benchmark_extra_sources_are_checked(tmp_path):
+    section = make_section(
+        tmp_path,
+        "```benchmark id=curve lang=python\nharness: curve\nsource: snippets/curve.py\n"
+        "extra: [snippets/sum_ref.py, snippets/missing.py]\n```\n",
+    )
+    with pytest.raises(ContentError, match="missing.py"):
+        render_section(section)
+
+
+def test_benchmark_extra_must_not_shadow_units(tmp_path):
+    section = make_section(tmp_path, "```benchmark id=curve lang=python\nharness: curve\nsource: snippets/curve.py\nextra: [snippets/a.py]\n```\n")
+    (section.dir / "snippets" / "a.py").write_text("x = 1\n")
+    with pytest.raises(ContentError, match="a.py"):
+        render_section(section)

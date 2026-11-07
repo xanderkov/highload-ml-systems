@@ -247,3 +247,13 @@ def test_asset_route_refuses_traversal(client):
 
     assert response.status_code == 404
     assert "# ref" not in response.text
+
+
+def test_benchmark_extra_sources_become_units(section):
+    from dataclasses import replace
+    (section.dir / "snippets" / "naive_service.py").write_text("# naive\n", encoding="utf-8")
+    section = replace(section, body=section.body.replace(
+        "source: snippets/curve.py\n```\n\n```benchmark id=curve-edit",
+        "source: snippets/curve.py\nextra: [snippets/naive_service.py]\n```\n\n```benchmark id=curve-edit"))
+    job = build_job(section, blocks_of(section)["curve"], "")
+    assert job["units"] == {"a": "# curve\n", "naive_service": "# naive\n"}

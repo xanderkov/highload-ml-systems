@@ -129,6 +129,22 @@ def _build_block(section: Section, info: str, body: str) -> Block:
                 f"требует поле source"
             )
         _require_file(section, params["source"], "source")
+        # extra: другие файлы раздела, которые харнессу нужны как модули
+        # (например, варианты сервиса для сравнения). Каждый уходит в job
+        # отдельным юнитом с именем по файлу, поэтому имена a и b заняты.
+        extra = params.get("extra", [])
+        if not isinstance(extra, list):
+            raise ContentError(f"{section.dir / 'section.md'}: benchmark {attrs['id']}: extra должен быть списком путей")
+        stems = set()
+        for path in extra:
+            stem = Path(str(path)).stem
+            if stem in ("a", "b") or stem in stems:
+                raise ContentError(
+                    f"{section.dir / 'section.md'}: benchmark {attrs['id']}: extra {path} — "
+                    f"имя юнита {stem!r} занято"
+                )
+            stems.add(stem)
+            _require_file(section, str(path), "extra")
 
     return Block(kind=kind, id=attrs["id"], lang=lang, params=params)
 

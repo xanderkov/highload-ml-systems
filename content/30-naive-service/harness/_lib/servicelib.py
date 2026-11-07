@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import http.client
 import os
 import signal
 import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
 from dataclasses import dataclass, field
@@ -25,6 +27,10 @@ from typing import Callable
 import numpy as np
 
 HEALTH_TIMEOUT_S = 30
+# Сервису в сравнительных замерах — не больше стольких CPU: так результат
+# одинаков на машине студента с 4 ядрами и на большой, а генератор на одном
+# CPU успевает нагрузить сервис до насыщения.
+SERVICE_MAX_CPUS = 3
 TERM_GRACE_S = 3
 MAX_GENERATOR_LAG_MS = 5
 STDERR_TAIL_BYTES = 4000
@@ -367,3 +373,55 @@ def cpu_seconds(pids: list[int]) -> float:
             continue
         total += int(fields[11]) + int(fields[12])  # поля 14 и 15 в нумерации proc(5)
     return total / tick
+
+
+def service_cpus(available: set[int]) -> set[int]:
+    """Первые SERVICE_MAX_CPUS из CPU сервиса (см. константу)."""
+    return set(sorted(available)[:SERVICE_MAX_CPUS])
+
+
+def probe_capacity(url: str, body: bytes, content_type: str, *, cpus: set[int],
+                   connections: int = 8, seconds: float = 1.5, path: str = "/predict") -> float:
+    """Ответов в секунду при постоянной очереди: закрытый цикл в несколько соединений.
+
+    Каждое соединение шлёт следующий запрос, как только получило ответ, —
+    у сервиса всегда есть работа, и число ответов в секунду и есть его
+    ёмкость. Клиенты работают на cpus (CPU генератора). Ответ не 200 —
+    RuntimeError с кодом.
+    """
+    host, port = url.split("://", 1)[1].rsplit(":", 1)
+    done = [0] * connections
+    failed: list = []
+    deadline = time.perf_counter() + seconds
+
+    def client(k: int) -> None:
+        conn = http.client.HTTPConnection(host, int(port), timeout=10)
+        try:
+            while time.perf_counter() < deadline:
+                conn.request("POST", path, body, {"Content-Type": content_type})
+                response = conn.getresponse()
+                response.read()
+                if response.status != 200:
+                    failed.append(f"HTTP {response.status}")
+                    return
+                done[k] += 1
+        except OSError as exc:
+            failed.append(exc)
+        finally:
+            conn.close()
+
+    # Потоки наследуют привязку создающего потока: клиенты — на CPU генератора.
+    old = os.sched_getaffinity(0)
+    os.sched_setaffinity(0, cpus)
+    try:
+        started = time.perf_counter()
+        threads = [threading.Thread(target=client, args=(k,)) for k in range(connections)]
+        for t in threads:
+            t.start()
+    finally:
+        os.sched_setaffinity(0, old)
+    for t in threads:
+        t.join()
+    if failed:
+        raise RuntimeError(f"замер ёмкости: сервис ответил ошибкой: {failed[0]}")
+    return sum(done) / (time.perf_counter() - started)

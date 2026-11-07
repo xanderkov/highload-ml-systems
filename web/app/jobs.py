@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 from app.content import Block, ContentError, Section
 
@@ -71,6 +72,8 @@ def build_job(section: Section, block: Block, code: str) -> dict:
     # Замер — series-харнесс: исходник замера юнитом "a", правка студента
     # (если блок редактируемый) — юнитом "b".
     job["units"] = {"a": _read_unit(section, block.params["source"])}
+    for path in block.params.get("extra", []):
+        job["units"][Path(str(path)).stem] = _read_unit(section, str(path))
     if "starter_code" in block.params:
         job["units"]["b"] = code
     job["target"] = None
