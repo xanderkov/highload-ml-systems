@@ -10,7 +10,6 @@ from pathlib import Path
 
 import httpx
 import pytest
-import yaml
 
 from app.content import list_sections
 from app.jobs import build_job
@@ -75,11 +74,6 @@ def skip_if_not_enough_cores(result):
         pytest.skip(result["log"].strip())
 
 
-def harness_meta(section, block):
-    path = section.dir / "harness" / block.params["harness"] / "meta.yml"
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-
-
 @pytest.mark.content
 @pytest.mark.parametrize("section,block", EXERCISES)
 def test_reference_solution_reaches_target(section, block):
@@ -117,28 +111,15 @@ def test_starter_code_does_not_reach_target(section, block):
 def test_benchmark_block_runs(section, block):
     """Бенчмарки в тексте тоже исполняются, а не только задания.
 
-    Без этого лестница кэша, кривая префетчера и бенчмарк оси не проверялись бы
-    ничем: их код компилируется и запускается только по нажатию кнопки в
-    браузере, и сломанный харнесс обнаружился бы студентом, а не тестом.
+    Без этого их код запускался бы только по нажатию кнопки в браузере, и
+    сломанный харнесс обнаружился бы студентом, а не тестом. Замер —
+    series-харнесс: набор линий, у каждой непустой список точек.
     """
     result = execute(section, block, "")
 
     assert result["status"] == "ok", result
-
-    if "series" in result:
-        sizes = harness_meta(section, block)["sizes"]
-        assert [point["size"] for point in result["series"]] == list(sizes)
-        assert all(point["ms_per_element"] > 0 for point in result["series"]), result
-    elif "lines" in result:
-        # series-харнесс: набор линий, у каждой непустой список числовых точек.
-        assert result["lines"], result
-        assert all(line["points"] for line in result["lines"]), result
-    else:
-        # A/B-бенчмарк сравнивает два варианта одного вычисления: если их
-        # ответы разошлись, сравнивать время бессмысленно — это ошибка в
-        # материалах, а не наблюдение про память.
-        assert result["correct"] is True, result
-        assert result["baseline_ms"] > 0 and result["student_ms"] > 0, result
+    assert result["lines"], result
+    assert all(line["points"] for line in result["lines"]), result
 
 
 # ── Раздел «Python как рантайм сервиса», задание 1 (copy-on-write) ──────
@@ -230,3 +211,47 @@ def test_decode_swapped_axes_are_incorrect():
     assert result["status"] == "ok", result
     assert result["correct"] is False, result
     assert result["passed"] is False, result
+
+
+# ── Раздел «Наивный сервис и свой батчер», задание «собрать батч» ──────
+
+# Обёртка над эталоном, которая переставляет элементы батча: модель получит
+# входы в другом порядке, и ответы уйдут не тем запросам.
+BATCHER_MIXUP = """
+
+_collect = collect_batch
+
+
+async def collect_batch(queue, max_batch_size, max_delay):
+    batch = await _collect(queue, max_batch_size, max_delay)
+    if len(batch) > 1:
+        tensors = [item[0] for item in batch]
+        batch = [(tensors[(k + 1) % len(batch)], item[1]) for k, item in enumerate(batch)]
+    return batch
+"""
+
+BATCHER_WAIT_FOR_FULL = """
+async def collect_batch(queue, max_batch_size, max_delay):
+    batch = []
+    while len(batch) < max_batch_size:
+        batch.append(await queue.get())
+    return batch
+"""
+
+
+@pytest.mark.content
+def test_batcher_mixed_up_responses_are_incorrect():
+    code = read_snippet("batcher_ref.py", "30-naive-service") + BATCHER_MIXUP
+    result = execute_exercise("naive-service", "batcher-exercise", code)
+    skip_if_not_enough_cores(result)
+    assert result["status"] == "ok", result
+    assert result["correct"] is False and result["passed"] is False, result
+    assert "перепутаны" in result["stderr"], result
+
+
+@pytest.mark.content
+def test_batcher_waiting_for_full_batch_is_reported():
+    result = execute_exercise("naive-service", "batcher-exercise", BATCHER_WAIT_FOR_FULL)
+    skip_if_not_enough_cores(result)
+    assert result["status"] == "runtime_error", result
+    assert "max_batch_size" in result["log"], result

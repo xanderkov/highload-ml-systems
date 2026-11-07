@@ -1,0 +1,10 @@
+kind: ab
+lang: python
+# auto: потоки torch сервиса задаёт bench.py через start_service(torch_threads=...).
+threads: auto
+sizes: [1]
+warmup: 0
+repeats: 3
+timeout_s: 90
+memory_mb: 2048
+tolerance: 0
