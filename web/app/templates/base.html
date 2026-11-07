@@ -24,17 +24,18 @@
          class="fixed top-14 bottom-0 left-0 z-30 w-72 -translate-x-full overflow-y-auto border-r border-line bg-page px-4 py-6 transition-transform data-[open]:translate-x-0 md2:sticky md2:z-auto md2:h-[calc(100vh-3.5rem)] md2:w-auto md2:translate-x-0 md2:transition-none">
       <p class="mb-3 px-2 text-xs font-semibold tracking-wide text-muted uppercase">Разделы</p>
       <ol class="space-y-1">
-        {% for item in course_sections %}
+        {% for item in course_nav %}
         {% set current = section is defined and item.id == section.id %}
-        <li data-section-nav="{{ item.id }}">
+        <li data-section-nav="{{ item.id }}"{% if item.exercises %} data-exercises="{{ item.exercises | join(',') }}"{% endif %}>
           <a href="/section/{{ item.id }}"{% if current %} aria-current="page"{% endif %}
              class="flex items-baseline gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-surface aria-[current=page]:bg-surface aria-[current=page]:font-semibold aria-[current=page]:text-accent">
             <span class="font-mono text-xs text-muted tabular-nums">{{ "%02d" | format(loop.index) }}</span>
             <span class="min-w-0 flex-1">{{ item.title }}</span>
+            {% if item.exercises %}<span data-progress hidden class="shrink-0 font-mono text-[11px] text-muted tabular-nums data-[complete]:text-good"></span>{% endif %}
           </a>
-          {% if current and outline %}
+          {% if current and item.parts %}
           <ol class="mt-1 mb-2 ml-[1.15rem] space-y-0.5 border-l border-line pl-3">
-            {% for part in outline %}
+            {% for part in item.parts %}
             <li><a href="#{{ part.id }}" class="block rounded px-2 py-1 text-[13px] leading-snug text-muted hover:text-ink">{{ part.title }}</a></li>
             {% endfor %}
           </ol>

@@ -5,19 +5,39 @@
   <h1 class="text-3xl font-bold tracking-tight md2:text-4xl">{{ course_title }}</h1>
   <p class="course-subtitle mt-2 text-lg text-muted">{{ course_subtitle }}</p>
 
+  <div class="mt-8 space-y-4 text-[15px] leading-7">
+    <p>Сервис с моделью на Python под нагрузкой ведёт себя хуже, чем обещает сама модель: время уходит на рантайм, протокол, очередь и обработку запросов по одному. Курс проходит этот путь руками — от того, как CPython живёт в воркерах, через наивный сервис на FastAPI и свой батчер к Triton Inference Server.</p>
+    <p>Каждая глава устроена одинаково: <strong>замер → боль → решение</strong>. Сначала вы видите проблему в цифрах на своей машине, потом чините её сами, и только после этого смотрим, что из этого Triton берёт на себя.</p>
+  </div>
+
   <h2 class="mt-12 mb-4 text-sm font-semibold tracking-wide text-muted uppercase">Разделы курса</h2>
   <ol class="grid gap-3">
-    {% for section in sections %}
+    {% for item in course_nav %}
     <li>
-      <a href="/section/{{ section.id }}" class="card flex gap-4 px-5 py-4 hover:border-accent">
+      <a href="/section/{{ item.id }}" data-section-card="{{ item.id }}"{% if item.exercises %} data-exercises="{{ item.exercises | join(',') }}"{% endif %}
+         class="card flex gap-4 px-5 py-4 transition-colors hover:border-accent">
         <span class="font-mono text-sm text-muted tabular-nums">{{ "%02d" | format(loop.index) }}</span>
-        <span class="min-w-0">
-          <span class="block font-semibold text-ink">{{ section.title }}</span>
-          {% if section.summary %}<span class="mt-1 block text-sm text-muted">{{ section.summary }}</span>{% endif %}
+        <span class="min-w-0 flex-1">
+          <span class="block font-semibold text-ink">{{ item.title }}</span>
+          {% if item.summary %}<span class="mt-1 block text-sm text-muted">{{ item.summary }}</span>{% endif %}
         </span>
+        {% if item.exercises %}<span data-progress hidden class="shrink-0 self-start rounded-full border border-line px-2 py-0.5 font-mono text-xs text-muted tabular-nums data-[complete]:border-good data-[complete]:text-good"></span>{% endif %}
       </a>
+    </li>
+    {% endfor %}
+    {% for soon in ["Triton Inference Server", "LLM-сервинг"] %}
+    <li>
+      <div class="flex gap-4 rounded-lg border border-dashed border-line px-5 py-4 text-muted">
+        <span class="font-mono text-sm tabular-nums">{{ "%02d" | format(course_nav | length + loop.index) }}</span>
+        <span class="min-w-0 flex-1 font-semibold">{{ soon }}</span>
+        <span class="shrink-0 self-start rounded-full bg-surface px-2 py-0.5 text-xs">скоро</span>
+      </div>
     </li>
     {% endfor %}
   </ol>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ asset_prefix }}/app.js"></script>
 {% endblock %}

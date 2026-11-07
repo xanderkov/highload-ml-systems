@@ -36,7 +36,15 @@
     {% for part in outline %}
     <li data-part="{{ part.id }}"{% if part.exercises %} data-exercises="{{ part.exercises | join(',') }}"{% endif %}>
       <a href="#{{ part.id }}" data-toc-link
-         class="-ml-px block border-l border-transparent py-1 pl-3 text-[13px] leading-snug text-muted hover:text-ink aria-[current=true]:border-accent aria-[current=true]:text-accent">{{ part.title }}</a>
+         class="-ml-px flex gap-1.5 border-l border-transparent py-1 pl-3 text-[13px] leading-snug text-muted hover:text-ink aria-[current=true]:border-accent aria-[current=true]:text-accent"><span class="min-w-0 flex-1">{{ part.title }}</span><span data-part-mark hidden class="text-good">✓</span></a>
+      {% if part.subs %}
+      <ol>
+        {% for sub in part.subs %}
+        <li><a href="#{{ sub.id }}" data-toc-link
+               class="-ml-px block border-l border-transparent py-0.5 pl-6 text-xs leading-snug text-muted hover:text-ink aria-[current=true]:border-accent aria-[current=true]:text-accent">{{ sub.title }}</a></li>
+        {% endfor %}
+      </ol>
+      {% endif %}
     </li>
     {% endfor %}
   </ol>

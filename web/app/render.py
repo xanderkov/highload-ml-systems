@@ -191,24 +191,11 @@ def render_section(section: Section) -> tuple[str, list[Block]]:
     # транслитерировать кириллицу незачем, а section_outline нумерует части в
     # том же порядке, так что ссылки и якоря сходятся по построению.
     default_heading = md.renderer.rules.get("heading_open")
-    part_number = [0]
-    heading_ids: set[str] = set()
+    anchors = _Anchors()
 
     def heading_open(tokens, idx, options, env):
         token = tokens[idx]
-        if token.tag == "h2":
-            part_number[0] += 1
-            anchor = f"part-{part_number[0]}"
-        else:
-            title = tokens[idx + 1].content
-            slug = re.sub(r"[^\w-]+", "-", title.lower()).strip("-") or "heading"
-            base = f"heading-{slug}"
-            anchor = base
-            suffix = 2
-            while anchor in heading_ids:
-                anchor = f"{base}-{suffix}"
-                suffix += 1
-        heading_ids.add(anchor)
+        anchor = anchors.next(token.tag, tokens[idx + 1].content)
         token.attrSet("id", anchor)
         # Отступ при переходе по якорю: иначе заголовок уезжает под
         # закреплённую верхнюю полосу страницы.
@@ -245,6 +232,34 @@ def render_section(section: Section) -> tuple[str, list[Block]]:
     return html, blocks
 
 
+class _Anchors:
+    """Якоря заголовков в порядке документа.
+
+    Одна и та же последовательность у render_section (ставит id) и у
+    section_outline (строит оглавления), поэтому ссылки и якоря сходятся по
+    построению. Части (h2) нумеруются: транслитерировать кириллицу незачем.
+    Прочие заголовки — по тексту, с суффиксом у повторов.
+    """
+
+    def __init__(self) -> None:
+        self.parts = 0
+        self.used: set[str] = set()
+
+    def next(self, tag: str, title: str) -> str:
+        if tag == "h2":
+            self.parts += 1
+            anchor = f"part-{self.parts}"
+        else:
+            slug = re.sub(r"[^\w-]+", "-", title.lower()).strip("-") or "heading"
+            base = anchor = f"heading-{slug}"
+            suffix = 2
+            while anchor in self.used:
+                anchor = f"{base}-{suffix}"
+                suffix += 1
+        self.used.add(anchor)
+        return anchor
+
+
 def section_outline(section: Section) -> list[dict]:
     """Части раздела для бокового оглавления: заголовки h2 по порядку и
     идентификаторы заданий, попавших под каждый из них.
@@ -258,15 +273,19 @@ def section_outline(section: Section) -> list[dict]:
     tokens = md.parse(section.body)
 
     parts: list[dict] = []
-    number = 0
+    anchors = _Anchors()
     for index, token in enumerate(tokens):
-        if token.type == "heading_open" and token.tag == "h2":
-            number += 1
-            title = tokens[index + 1].content if index + 1 < len(tokens) else ""
-            # Части в тексте пронумерованы вручную («## 1. Вы это уже знаете»),
-            # а панель показывает свой номер — иначе выходит «01 · 1.».
-            title = LEADING_NUMBER.sub("", title, count=1)
-            parts.append({"id": f"part-{number}", "title": title, "exercises": []})
+        if token.type == "heading_open":
+            raw = tokens[index + 1].content if index + 1 < len(tokens) else ""
+            anchor = anchors.next(token.tag, raw)
+            if token.tag == "h2":
+                # Части в тексте пронумерованы вручную («## 1. Вы это уже знаете»),
+                # а навигация показывает свой номер — иначе выходит «01 · 1.».
+                title = LEADING_NUMBER.sub("", raw, count=1)
+                parts.append({"id": anchor, "title": title, "exercises": [], "subs": []})
+            elif token.tag == "h3" and parts:
+                # Обратные кавычки инлайн-кода в оглавлении — шум.
+                parts[-1]["subs"].append({"id": anchor, "title": raw.replace("`", "")})
         elif token.type == "fence" and parts:
             info = token.info.strip()
             if not info:

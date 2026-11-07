@@ -90,6 +90,27 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+def course_nav(sections: list[Section]) -> list[dict]:
+    """Разделы для навигации и главной: части и задания каждого раздела.
+
+    Задания нужны странице целиком (а не только текущего раздела): счётчик
+    «N из M» стоит у каждого раздела в левой колонке и на карточках главной.
+    """
+    nav = []
+    for section in sections:
+        parts = section_outline(section)
+        nav.append(
+            {
+                "id": section.id,
+                "title": section.title,
+                "summary": section.summary,
+                "parts": parts,
+                "exercises": [ex for part in parts for ex in part["exercises"]],
+            }
+        )
+    return nav
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     """Оглавление курса: все разделы по order. Отсюда же, из шапки, раздел
@@ -98,7 +119,7 @@ def index(request: Request):
     if not sections:
         raise HTTPException(status_code=404, detail="Материалы курса не найдены")
     return templates.TemplateResponse(
-        request, "index.html", {"sections": sections, "course_sections": sections}
+        request, "index.html", {"course_nav": course_nav(sections)}
     )
 
 
@@ -110,15 +131,16 @@ def section_page(request: Request, section_id: str):
         raise HTTPException(status_code=404, detail=f"Раздел {section_id} не найден")
     section = sections[position]
     body, _blocks = render_section(section)
+    nav = course_nav(sections)
     return templates.TemplateResponse(
         request,
         "section.html",
         {
             "section": section,
             "body": body,
-            "outline": section_outline(section),
+            "outline": nav[position]["parts"],
             "section_number": position + 1,
-            "course_sections": sections,
+            "course_nav": nav,
             "prev_section": sections[position - 1] if position > 0 else None,
             "next_section": sections[position + 1] if position + 1 < len(sections) else None,
         },

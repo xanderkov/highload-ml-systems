@@ -302,3 +302,20 @@ def test_duplicate_heading_ids_are_unique(tmp_path):
     for anchor in ("heading-пример", "heading-пример-2", "heading-пример-3"):
         assert html.count(f'id="{anchor}"') == 1
         assert f'href="#{anchor}"' in html
+
+
+def test_outline_has_subheadings(tmp_path):
+    body = "## 1. Первая\n\n### Арены, пулы и блоки\n\nт\n\n### А `gc.freeze()`?\n\nт\n\n## Вторая\n\n### Арены, пулы и блоки\n"
+    section = make_section(tmp_path, body)
+
+    html, _ = render_section(section)
+    parts = section_outline(section)
+
+    assert [p["title"] for p in parts] == ["Первая", "Вторая"]
+    subs = parts[0]["subs"]
+    assert [s["title"] for s in subs] == ["Арены, пулы и блоки", "А gc.freeze()?"]
+    # Якоря подзаголовков — те же, что проставил render_section, включая
+    # суффикс у повторившегося заголовка во второй части.
+    for sub in subs + parts[1]["subs"]:
+        assert f'id="{sub["id"]}"' in html
+    assert parts[1]["subs"][0]["id"] == subs[0]["id"] + "-2"

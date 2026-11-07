@@ -176,3 +176,74 @@ def test_pages_use_course_title(client):
     section = client.get("/section/demo").text
     assert "Высоконагруженные ML/DL системы" in section
     assert "Оптимизация" not in section and "Оптимизация" not in home
+
+
+@pytest.fixture
+def mixed(tmp_path, monkeypatch):
+    with_exercise = tmp_path / "20-with"
+    (with_exercise / "snippets").mkdir(parents=True)
+    (with_exercise / "harness" / "sum").mkdir(parents=True)
+    (with_exercise / "harness" / "sum" / "meta.yml").write_text("kind: ab\n")
+    for name in ("s.py", "r.py"):
+        (with_exercise / "snippets" / name).write_text("x = 1\n", encoding="utf-8")
+    (with_exercise / "section.md").write_text(
+        "---\nid: with\ntitle: С заданием\norder: 10\nsummary: Строка о разделе\n---\n\n## Часть\n\n"
+        "```exercise id=ex1 lang=python\ntitle: Т\ntarget: speedup >= 2\nstarter: snippets/s.py\n"
+        "reference: snippets/r.py\nharness: sum\n```\n",
+        encoding="utf-8",
+    )
+    without = tmp_path / "30-without"
+    without.mkdir()
+    (without / "section.md").write_text(
+        "---\nid: without\ntitle: Без заданий\norder: 20\n---\n\n## Часть\n\nТекст.\n", encoding="utf-8"
+    )
+    monkeypatch.setenv("CONTENT_ROOT", str(tmp_path))
+    return TestClient(main.app)
+
+
+def _nav_item(html, section_id):
+    start = html.index(f'data-section-nav="{section_id}"')
+    return html[html.rindex("<li", 0, start) : html.index("</li>", start)]
+
+
+def test_nav_lists_all_sections_with_exercises(mixed):
+    for page in ("/", "/section/with", "/section/without"):
+        item = _nav_item(mixed.get(page).text, "with")
+        assert 'data-exercises="ex1"' in item
+        assert "data-progress" in item
+
+
+def test_nav_hides_progress_without_exercises(mixed):
+    html = mixed.get("/section/with").text
+    item = _nav_item(html, "without")
+    assert "data-exercises" not in item and "data-progress" not in item
+    home = mixed.get("/").text
+    card = home[home.index('data-section-card="without"') :]
+    card = card[: card.index("</a>")]
+    assert "data-progress" not in card
+
+
+def test_home_cards_show_summary_and_progress(mixed):
+    home = mixed.get("/").text
+    card = home[home.index('data-section-card="with"') :]
+    card = card[: card.index("</a>")]
+    assert "Строка о разделе" in card and 'data-exercises="ex1"' in card and "data-progress" in card
+
+
+def test_home_has_soon_cards(mixed):
+    home = mixed.get("/").text
+    for title in ("Triton Inference Server", "LLM-сервинг"):
+        assert title in home
+        before = home[: home.index(title)]
+        # Карточка «скоро» — не ссылка: последний открытый <a> перед ней закрыт.
+        assert before.rfind("<a ") < before.rfind("</a>")
+
+
+def test_page_toc_lists_subheadings(mixed, tmp_path):
+    (tmp_path / "30-without" / "section.md").write_text(
+        "---\nid: without\ntitle: Без заданий\norder: 20\n---\n\n## Часть\n\n### Подробность\n\nТекст.\n",
+        encoding="utf-8",
+    )
+    html = mixed.get("/section/without").text
+    toc = html[html.index('id="page-toc"') :]
+    assert 'href="#heading-подробность"' in toc[: toc.index("</nav>")]

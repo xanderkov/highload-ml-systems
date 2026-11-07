@@ -1,7 +1,7 @@
 // Монтирование интерактивных блоков. Разметку блоков (<div class="block"
 // data-kind data-id data-lang data-params>) отдаёт render.py.
 
-import { isDone } from "./progress.js";
+import { mountNav } from "./nav.js";
 
 const BLOCK_MODULES = {
   exercise: "./blocks/exercise.js",
@@ -51,67 +51,6 @@ function typeset() {
   });
 }
 
-/** Боковое оглавление: отметки о зачёте и подсветка текущей части. */
-function mountOutline(sectionId) {
-  const nav = document.querySelector(".section-toc");
-  if (!nav) return;
-
-  const items = [...nav.querySelectorAll(".toc-parts li")];
-  const bars = [...nav.querySelectorAll(".toc-bar span")];
-
-  // Часть считается пройденной, когда зачтены все задания внутри неё. Часть
-  // без заданий отметки не получает: читать её можно, «сдать» — нечего.
-  function refreshDone() {
-    let total = 0;
-    let done = 0;
-    for (const item of items) {
-      const ids = (item.dataset.exercises || "").split(",").filter(Boolean);
-      if (!ids.length) continue;
-      total += ids.length;
-      const passed = ids.filter((id) => isDone(sectionId, id));
-      done += passed.length;
-      item.querySelector(".toc-mark").hidden = passed.length !== ids.length;
-    }
-    const label = nav.querySelector(".toc-progress");
-    if (total) {
-      label.textContent = `${done}/${total}`;
-      label.hidden = false;
-    }
-  }
-
-  refreshDone();
-  // Прогресс пишется в localStorage при зачёте, но события об этом нет —
-  // перечитываем после каждого запуска задания.
-  document.addEventListener("click", (event) => {
-    if (event.target.closest(".exercise .run")) setTimeout(refreshDone, 0);
-  });
-
-  const headings = items
-    .map((item) => document.getElementById(item.dataset.part))
-    .filter(Boolean);
-  if (!headings.length || !("IntersectionObserver" in window)) return;
-
-  const seen = new Set();
-  const observer = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) seen.add(entry.target.id);
-      }
-      // Текущая — последняя часть, чей заголовок уже проехал верх экрана.
-      let current = headings[0].id;
-      for (const heading of headings) {
-        if (heading.getBoundingClientRect().top <= 120) current = heading.id;
-      }
-      items.forEach((item, index) => {
-        item.classList.toggle("is-current", item.dataset.part === current);
-        bars[index]?.classList.toggle("is-seen", seen.has(item.dataset.part));
-      });
-    },
-    { rootMargin: "-100px 0px -70% 0px", threshold: 0 }
-  );
-  headings.forEach((heading) => observer.observe(heading));
-}
-
 document.addEventListener("DOMContentLoaded", async () => {
   const initialHash = location.hash;
   let navigated = false;
@@ -126,6 +65,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   const sectionId = document.querySelector(".section")?.dataset.section;
+  mountNav(sectionId);
   if (sectionId) {
     for (const element of document.querySelectorAll(".block")) {
       try {
@@ -134,7 +74,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         showMountError(element, error.message || error);
       }
     }
-    mountOutline(sectionId);
   }
 
   typeset();

@@ -20,8 +20,16 @@ export function markDone(sectionId, blockId) {
   } catch {
     /* приватный режим: прогресс просто не сохранится */
   }
+  // Навигация (nav.js) обновляет счётчики по этому событию.
+  document.dispatchEvent(new CustomEvent("course:progress"));
 }
 
 export function isDone(sectionId, blockId) {
   return Boolean(read()[sectionId]?.[blockId]);
+}
+
+/** Сколько из перечисленных заданий раздела зачтено. Без localStorage — 0. */
+export function doneCount(sectionId, blockIds) {
+  const done = read()[sectionId] || {};
+  return blockIds.filter((id) => Boolean(done[id])).length;
 }
