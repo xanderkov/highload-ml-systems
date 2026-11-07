@@ -2,6 +2,7 @@
 // data-kind data-id data-lang data-params>) отдаёт render.py.
 
 import { mountNav } from "./nav.js";
+import { mountThemeToggle } from "./theme.js";
 
 const BLOCK_MODULES = {
   exercise: "./blocks/exercise.js",
@@ -65,6 +66,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   const sectionId = document.querySelector(".section")?.dataset.section;
+  mountThemeToggle();
   mountNav(sectionId);
   if (sectionId) {
     for (const element of document.querySelectorAll(".block")) {

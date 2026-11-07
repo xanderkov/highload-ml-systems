@@ -15,6 +15,19 @@
 @source "../blocks";
 @source "../viz";
 
+/* Вариант dark: следует той же логике, что токены ниже (система или ручной
+   выбор), чтобы dark:-утилиты не расходились с цветами страницы. */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+}
+
 @theme {
   --font-sans: "Inter Variable", "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
@@ -39,14 +52,19 @@
   --color-series-5: #64748b;
 }
 
+/* Тёмная тема: по системной настройке, если пользователь не выбрал светлую
+   вручную, и всегда — если выбрал тёмную (data-theme на <html> ставит
+   скрипт в <head>, см. base.html). Значения продублированы намеренно: в CSS
+   нет способа сослаться на один набор из двух селекторов. Нейтральная,
+   без синевы. */
 @layer base {
   @media (prefers-color-scheme: dark) {
-    :root {
-      --color-page: #0b1020;
-      --color-surface: #111827;
-      --color-line: #1f2937;
-      --color-ink: #e5e7eb;
-      --color-muted: #94a3b8;
+    :root:not([data-theme="light"]) {
+      --color-page: #0a0a0a;
+      --color-surface: #171717;
+      --color-line: #262626;
+      --color-ink: #e5e5e5;
+      --color-muted: #a3a3a3;
       --color-accent: #818cf8;
       --color-good: #4ade80;
       --color-bad: #f87171;
@@ -56,10 +74,30 @@
       --color-series-2: #2dd4bf;
       --color-series-3: #fb923c;
       --color-series-4: #f472b6;
-      --color-series-5: #94a3b8;
+      --color-series-5: #a3a3a3;
 
       color-scheme: dark;
     }
+  }
+
+  :root[data-theme="dark"] {
+    --color-page: #0a0a0a;
+    --color-surface: #171717;
+    --color-line: #262626;
+    --color-ink: #e5e5e5;
+    --color-muted: #a3a3a3;
+    --color-accent: #818cf8;
+    --color-good: #4ade80;
+    --color-bad: #f87171;
+    --color-warn: #fbbf24;
+
+    --color-series-1: #818cf8;
+    --color-series-2: #2dd4bf;
+    --color-series-3: #fb923c;
+    --color-series-4: #f472b6;
+    --color-series-5: #a3a3a3;
+
+    color-scheme: dark;
   }
 
   html {

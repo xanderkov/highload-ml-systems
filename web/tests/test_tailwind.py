@@ -63,3 +63,17 @@ def test_no_external_urls(client):
 def test_old_stylesheet_is_gone(client):
     assert "style.css" not in client.get("/section/demo").text
     assert "app.css" in client.get("/section/demo").text
+
+
+def test_theme_toggle_and_early_theme_script(client):
+    html = client.get("/section/demo").text
+    assert "data-theme-toggle" in html
+    head = html[: html.index("</head>")]
+    # Тема выставляется до первой отрисовки, иначе тёмная страница мигает светлой.
+    assert "course.theme" in head and "dataset.theme" in head
+
+
+def test_app_css_supports_manual_theme(client):
+    css = client.get(f"{main.ASSET_PREFIX}/app.css").text
+    assert '[data-theme="dark"]' in css or "[data-theme=dark]" in css
+    assert ':not([data-theme="light"])' in css or ":not([data-theme=light])" in css

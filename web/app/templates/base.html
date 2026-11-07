@@ -4,6 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ course_title }}{% endblock %}</title>
+  <script>
+    // Ручной выбор темы (см. static/theme.js) — до первой отрисовки, иначе
+    // тёмная страница успевает мигнуть светлой. Без выбора — как в системе.
+    try {
+      const theme = localStorage.getItem("course.theme");
+      if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+    } catch {}
+  </script>
   <link rel="stylesheet" href="/static/vendor/fonts/inter/index.css">
   <link rel="stylesheet" href="/static/vendor/fonts/jetbrains-mono/400.css">
   <link rel="stylesheet" href="/static/vendor/fonts/jetbrains-mono/500.css">
@@ -17,6 +25,7 @@
     <button type="button" class="btn px-2.5 md2:hidden" data-drawer-toggle aria-controls="course-nav" aria-expanded="false" aria-label="Разделы курса">☰</button>
     <a class="site-home truncate text-[15px] font-semibold tracking-tight text-ink hover:text-accent" href="/">{{ course_title }}</a>
     <span class="hidden truncate text-sm text-muted sm:inline">{{ course_subtitle }}</span>
+    <button type="button" class="btn ml-auto shrink-0 px-2.5 text-muted" data-theme-toggle aria-label="Тема: как в системе" title="Тема: как в системе">◐</button>
   </header>
 
   <div class="mx-auto max-w-[1440px] md2:grid md2:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_220px]">

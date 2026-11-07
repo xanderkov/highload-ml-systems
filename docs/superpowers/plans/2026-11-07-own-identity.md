@@ -23,7 +23,7 @@
 - Токены цветов (светлая / тёмная):
   `page #ffffff / #0b1020`, `surface #f8fafc / #111827`, `line #e2e8f0 / #1f2937`, `ink #0f172a / #e5e7eb`, `muted #64748b / #94a3b8`, `accent #4f46e5 / #818cf8`, `good #16a34a / #4ade80`, `bad #dc2626 / #f87171`, `warn #d97706 / #fbbf24`;
   серии графиков `series-1..5`: светлая `#4f46e5 #0d9488 #ea580c #db2777 #64748b`, тёмная `#818cf8 #2dd4bf #fb923c #f472b6 #94a3b8`.
-- Тёмная тема — только по `prefers-color-scheme: dark`; ручного переключателя нет.
+- Тема: «как в системе / светлая / тёмная» (`static/theme.js`, `data-theme` на `<html>`); компоненты, которые красятся из JS, узнают тему через `isDark()` из `theme.js` и перерисовываются по событию `course:theme`. Тёмные токены нейтральные (`page #0a0a0a`, `surface #171717`, `line #262626`, `ink #e5e5e5`, `muted #a3a3a3`, `series-5 #a3a3a3`).
 - Брейкпоинты каркаса: правая колонка видна от 1200px, левая — от 860px; ниже 860px левая — выдвижная панель по кнопке «☰».
 - Тесты: `make test`, `make verify-content`; фокусно `docker compose run --rm --build web python -m pytest -q -k <expr>` / `... runner ...`. Браузера нет: JS проверяется в Node с linkedom скриптами в scratchpad (не коммитятся); визуально — автор в Firefox.
 - Сообщения коммитов заканчиваются строкой `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
@@ -186,7 +186,7 @@ def test_home_has_soon_cards(client):        # «Triton Inference Server» и «
 - Create: `web/static/theme.js`
 
 **Interfaces:**
-- Produces (`theme.js`): `aceTheme() -> "ace/theme/github" | "ace/theme/github_dark"` по `matchMedia("(prefers-color-scheme: dark)")`; `cssVar(name: string) -> string` (`getComputedStyle(document.documentElement)`); `chartColors() -> {series: string[5], grid: string, axis: string}` из `--color-series-1..5`, `--color-line`, `--color-muted`.
+- Produces (`theme.js`, уже содержит `isDark()` и `mountThemeToggle()`): `aceTheme() -> "ace/theme/github" | "ace/theme/github_dark"` по `isDark()`; редакторы меняют тему по `course:theme`; `cssVar(name: string) -> string` (`getComputedStyle(document.documentElement)`); `chartColors() -> {series: string[5], grid: string, axis: string}` из `--color-series-1..5`, `--color-line`, `--color-muted`.
 - Вид (спека §4.5): карточка с шапкой «Задание N» и бейджем статуса; кнопка «Запустить» `.btn-primary`, во время запуска — спиннер и «Выполняется…», кнопка `disabled`; зачтено — рамка `good`, метрика `text-4xl font-mono`, цель рядом; не зачтено — нейтральная рамка, метрика, цель, диагностика харнесса; ошибка — рамка `bad`, трассировка в `pre` с `overflow-x-auto max-h-96`. Классы состояний — словарь `{pass: "...", fail: "...", error: "..."}`.
 
 - [ ] **Step 1:** Реализация; все существующие тексты и логика результата (`statusLabel`, плюралы) не меняются — только разметка и классы.
