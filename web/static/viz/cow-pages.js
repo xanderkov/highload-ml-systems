@@ -25,12 +25,12 @@ export function mount(element, { params = {}, blockId = "cow-pages" } = {}) {
   const requested = Number(params.objects_per_page);
   const perPage = Number.isInteger(requested) && requested >= 1 && requested <= 8 ? requested : 4;
   const helpId = `${blockId}-help`;
-  element.classList.add("viz", "cow-pages");
+  element.classList.add("viz", "cow-pages", "block-card");
   element.innerHTML = `
     <div class="block-head"><span>Copy-on-write после fork</span><span>${PAGES} страниц · ${perPage} ${plural(perPage)} на страницу</span></div>
     <div class="cow-modes controls" role="radiogroup" aria-label="Как хранятся данные">
       ${Object.entries(MODES).map(([key, mode]) =>
-        `<button type="button" role="radio" data-mode="${key}" aria-checked="false">${mode.label}</button>`).join("")}
+        `<button class="btn" type="button" role="radio" data-mode="${key}" aria-checked="false">${mode.label}</button>`).join("")}
     </div>
     <div class="cow-stage" tabindex="0" aria-label="Страницы памяти родителя и воркера" aria-describedby="${helpId}">
       <pre class="cow-code" aria-hidden="true"></pre>
@@ -50,8 +50,8 @@ export function mount(element, { params = {}, blockId = "cow-pages" } = {}) {
     </div>
     <p class="cow-note" role="status">Ожидание</p>
     <div class="controls">
-      <button class="tick" type="button" aria-describedby="${helpId}">Такт</button>
-      <button class="restart" type="button">Сначала</button>
+      <button class="btn tick" type="button" aria-describedby="${helpId}">Такт</button>
+      <button class="btn restart" type="button">Сначала</button>
     </div>
     <p class="cow-help" id="${helpId}">«Такт» или Enter: воркер читает следующий объект. Клик по объекту в строке воркера читает именно его.</p>`;
 

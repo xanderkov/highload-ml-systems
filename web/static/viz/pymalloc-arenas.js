@@ -20,7 +20,7 @@ export function mount(element, { params = {}, blockId = "pymalloc-arenas" } = {}
   const requested = Number(params.arenas);
   const arenaCount = Number.isInteger(requested) && requested >= 2 && requested <= 6 ? requested : 4;
   const helpId = `${blockId}-help`;
-  element.classList.add("viz", "pymalloc-arenas");
+  element.classList.add("viz", "pymalloc-arenas", "block-card");
   element.innerHTML = `
     <div class="block-head"><span>Арены pymalloc</span><span>${arenaCount} ${plural(arenaCount, "арена", "арены", "арен")} · схема: ${POOLS} пулов по ${BLOCKS} блоков</span></div>
     <div class="pm-stage" aria-describedby="${helpId}">
@@ -33,10 +33,10 @@ export function mount(element, { params = {}, blockId = "pymalloc-arenas" } = {}
     </div>
     <p class="pm-note" role="status">Арен нет: процесс ещё не выделял память.</p>
     <div class="controls">
-      <button class="pm-create" type="button">Создать</button>
-      <button class="pm-thin" type="button">Удалить через один</button>
-      <button class="pm-clear" type="button">Удалить все</button>
-      <button class="pm-reset" type="button">Сначала</button>
+      <button class="btn pm-create" type="button">Создать</button>
+      <button class="btn pm-thin" type="button">Удалить через один</button>
+      <button class="btn pm-clear" type="button">Удалить все</button>
+      <button class="btn pm-reset" type="button">Сначала</button>
     </div>
     <p class="pm-help" id="${helpId}">Арена целиком (${ARENA_KIB} КиБ, ${REAL_POOLS} пулов по ${POOL_KIB} КиБ) возвращается ОС, только когда пуста. Клик по живому блоку удаляет его.</p>`;
 

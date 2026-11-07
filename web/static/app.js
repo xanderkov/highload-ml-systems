@@ -41,6 +41,31 @@ async function mountBlock(element, sectionId) {
   });
 }
 
+/** Кнопка «копировать» у блоков кода в тексте статьи (не в заданиях). */
+function addCopyButtons() {
+  for (const pre of document.querySelectorAll(".section pre")) {
+    if (pre.closest(".block") || pre.parentElement.classList.contains("code-wrap")) continue;
+    const wrap = document.createElement("div");
+    wrap.className = "code-wrap";
+    pre.replaceWith(wrap);
+    wrap.append(pre);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn code-copy";
+    button.textContent = "Копировать";
+    button.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(pre.textContent);
+        button.textContent = "Скопировано";
+      } catch {
+        button.textContent = "Не вышло";
+      }
+      setTimeout(() => { button.textContent = "Копировать"; }, 1500);
+    });
+    wrap.append(button);
+  }
+}
+
 function typeset() {
   if (!window.renderMathInElement) return;
   window.renderMathInElement(document.querySelector("main"), {
@@ -78,6 +103,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  addCopyButtons();
   typeset();
   // Interactive blocks also create headings after Markdown has been rendered.
   for (const heading of document.querySelectorAll('.section :is(h1, h2, h3, h4, h5, h6):not([id])')) {

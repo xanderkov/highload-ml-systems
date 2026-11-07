@@ -7,6 +7,7 @@
    элемент останется без стиля. Состояния — словарём полных имён. */
 
 @import "tailwindcss" source(none);
+@import "./viz.css";
 @plugin "@tailwindcss/typography";
 
 @source "../../app/templates";
@@ -284,4 +285,93 @@
 .block-card .u-legend .u-value {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+/* Ссылка-якорь у заголовка: заголовок — ссылка на себя, знак # виден при
+   наведении и фокусе. */
+.prose .heading-link {
+  color: inherit;
+  font-weight: inherit;
+  text-decoration: none;
+}
+.prose .heading-link::after {
+  content: " #";
+  color: var(--color-muted);
+  font-weight: 400;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.prose .heading-link:hover::after,
+.prose .heading-link:focus-visible::after {
+  opacity: 1;
+}
+
+/* Выноски `> [!NOTE]` и т. п. (render.py ставит класс и data-title). Цвет
+   полосы — по виду: заметка и «важно» — акцент, совет — зелёный,
+   осторожно — жёлтый, грабли — красный. */
+.prose blockquote.callout {
+  margin-block: 1.75rem;
+  border-left: 3px solid var(--color-accent);
+  border-radius: 0 0.5rem 0.5rem 0;
+  background: var(--color-surface);
+  padding: 0.85rem 1.1rem;
+  font-style: normal;
+  font-weight: 400;
+  quotes: none;
+}
+.prose blockquote.callout::before {
+  content: attr(data-title);
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+.prose blockquote.callout > :first-child {
+  margin-top: 0;
+}
+.prose blockquote.callout > :last-child {
+  margin-bottom: 0;
+}
+.prose blockquote.callout-tip {
+  border-left-color: var(--color-good);
+}
+.prose blockquote.callout-tip::before {
+  color: var(--color-good);
+}
+.prose blockquote.callout-warning {
+  border-left-color: var(--color-warn);
+}
+.prose blockquote.callout-warning::before {
+  color: var(--color-warn);
+}
+.prose blockquote.callout-caution {
+  border-left-color: var(--color-bad);
+}
+.prose blockquote.callout-caution::before {
+  color: var(--color-bad);
+}
+
+/* Кнопка «копировать» у блоков кода в тексте (ставит app.js). */
+.prose .code-wrap {
+  position: relative;
+}
+.prose .code-copy {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  opacity: 0;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+}
+.prose .code-wrap:hover .code-copy,
+.prose .code-copy:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .prose .code-copy {
+    opacity: 1;
+  }
 }
