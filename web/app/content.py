@@ -24,6 +24,8 @@ class Section:
     draft: bool
     dir: Path
     body: str
+    # Одна строка для карточки раздела на главной; необязательна.
+    summary: str | None = None
 
 
 def _split_frontmatter(text: str, source: Path) -> tuple[dict, str]:
@@ -65,6 +67,7 @@ def load_section(directory: Path) -> Section:
         draft=bool(meta.get("draft", False)),
         dir=directory,
         body=body,
+        summary=str(meta["summary"]).strip() if meta.get("summary") else None,
     )
 
 

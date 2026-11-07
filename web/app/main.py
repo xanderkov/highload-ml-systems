@@ -41,12 +41,21 @@ def asset_version(directory: Path) -> str:
 
 STATIC_DIR = BASE_DIR.parent / "static"
 ASSET_PREFIX = f"/assets/{asset_version(STATIC_DIR)}"
-app = FastAPI(title="Курс: оптимизация инференса")
+COURSE_TITLE = "Высоконагруженные ML/DL системы"
+COURSE_SUBTITLE = "Почему мы используем Triton"
+
+app = FastAPI(title=COURSE_TITLE)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount(ASSET_PREFIX, StaticFiles(directory=STATIC_DIR), name="versioned-static")
 templates = Jinja2Templates(
     directory=BASE_DIR / "templates",
-    context_processors=[lambda request: {"asset_prefix": ASSET_PREFIX}],
+    context_processors=[
+        lambda request: {
+            "asset_prefix": ASSET_PREFIX,
+            "course_title": COURSE_TITLE,
+            "course_subtitle": COURSE_SUBTITLE,
+        }
+    ],
 )
 
 

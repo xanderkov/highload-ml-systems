@@ -110,3 +110,13 @@ def test_every_viz_block_has_a_module():
         if block.kind == "viz" and not (viz_dir / f"{block.id}.js").is_file()
     ]
     assert missing == []
+
+
+def test_summary_is_optional(tmp_path):
+    plain = write_section(tmp_path, "a", "---\nid: a\ntitle: А\norder: 10\n---\n\nтекст\n")
+    described = write_section(
+        tmp_path, "b", "---\nid: b\ntitle: Б\norder: 20\nsummary: Одна строка.\n---\n\nтекст\n"
+    )
+
+    assert load_section(plain).summary is None
+    assert load_section(described).summary == "Одна строка."

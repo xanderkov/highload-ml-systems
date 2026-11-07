@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Оптимизация инференса{% endblock %}</title>
+  <title>{% block title %}{{ course_title }}{% endblock %}</title>
   <link rel="stylesheet" href="/static/vendor/fonts/jetbrains-mono/400.css">
   <link rel="stylesheet" href="/static/vendor/fonts/jetbrains-mono/500.css">
   <link rel="stylesheet" href="/static/vendor/fonts/jetbrains-mono/700.css">
@@ -13,7 +13,7 @@
 </head>
 <body>
   <header class="site-header">
-    <a class="site-home" href="/">Оптимизация инференса</a>
+    <a class="site-home" href="/">{{ course_title }}</a>
     {% if course_sections %}
     <nav class="course-nav" aria-label="Разделы курса">
       <ol>

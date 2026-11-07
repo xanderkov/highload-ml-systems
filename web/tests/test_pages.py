@@ -167,3 +167,12 @@ def test_real_course_lists_naive_service_after_python_runtime():
     assert html.index('href="/section/python-runtime"') < html.index('href="/section/naive-service"')
     page = TestClient(main.app).get("/section/naive-service")
     assert page.status_code == 200
+
+
+def test_pages_use_course_title(client):
+    home = client.get("/").text
+    assert "Высоконагруженные ML/DL системы" in home
+    assert "Почему мы используем Triton" in home
+    section = client.get("/section/demo").text
+    assert "Высоконагруженные ML/DL системы" in section
+    assert "Оптимизация" not in section and "Оптимизация" not in home
