@@ -1,0 +1,6 @@
+kind: series
+lang: python
+# Один поток torch — как у воркера сервиса в подглаве 1 (TORCH_THREADS = 1).
+threads: 1
+timeout_s: 60
+memory_mb: 1024
