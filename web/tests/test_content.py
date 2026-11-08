@@ -129,7 +129,11 @@ def test_section40_lib_copies_match_section30():
     from pathlib import Path
 
     root = Path(os.environ.get("CONTENT_ROOT", "/app/content"))
-    for name in ("servicelib.py", "widemodel.py"):
-        original = root / "30-naive-service" / "harness" / "_lib" / name
+    lib30 = root / "30-naive-service" / "harness" / "_lib"
+    copies = {name: lib30 / name for name in ("servicelib.py", "widemodel.py", "batcher_app.py")}
+    # Батчеры раздела 30 — точки сравнения для Triton (стартовый и эталонный).
+    for name in ("batcher_starter.py", "batcher_ref.py"):
+        copies[name] = root / "30-naive-service" / "snippets" / name
+    for name, original in copies.items():
         copy = root / "40-triton" / "harness" / "_lib" / name
         assert copy.read_bytes() == original.read_bytes(), name

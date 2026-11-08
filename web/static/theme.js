@@ -58,6 +58,11 @@ export function mountThemeToggle() {
   });
 }
 
+/** Режим Ace по языку блока: pbtxt (config.pbtxt Triton) ближе всего к protobuf. */
+export function aceMode(lang) {
+  return { python: "ace/mode/python", pbtxt: "ace/mode/protobuf" }[lang] || "ace/mode/text";
+}
+
 /** Тема Ace под текущую тему страницы. */
 export function aceTheme() {
   return isDark() ? "ace/theme/github_dark" : "ace/theme/github";

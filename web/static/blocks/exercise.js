@@ -9,7 +9,7 @@ import {
   renderProblem,
   statusLabel,
 } from "../result.js";
-import { aceTheme } from "../theme.js";
+import { aceMode, aceTheme } from "../theme.js";
 
 // Задание: редактор со стартовым кодом, кнопка «Проверить» и результат.
 // Состояние карточки — data-state (idle | running | pass | fail | error);
@@ -40,8 +40,7 @@ export function mount(element, { sectionId, blockId, lang, params }) {
 
   const starter = params.starter_code || "";
   const editor = ace.edit(element.querySelector(".editor"), {
-    // pbtxt — config.pbtxt Triton: подсветка protobuf text format ближе всего.
-    mode: { python: "ace/mode/python", pbtxt: "ace/mode/protobuf" }[lang] || "ace/mode/text",
+    mode: aceMode(lang),
     theme: aceTheme(),
     value: starter,
     minLines: 12,

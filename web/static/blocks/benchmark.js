@@ -1,6 +1,6 @@
 import { run } from "../api.js";
 import { escapeHtml, renderFault, renderProblem, statusLabel } from "../result.js";
-import { aceTheme, chartColors } from "../theme.js";
+import { aceMode, aceTheme, chartColors } from "../theme.js";
 
 // Замер: series-харнесс возвращает линии, блок рисует их графиком uPlot.
 // Если у блока есть starter, над графиком — редактор, и замер идёт по коду
@@ -34,7 +34,7 @@ function plural(n, one, few, many) {
   return d >= 2 && d <= 4 ? few : many;
 }
 
-export function mount(element, { sectionId, blockId, params }) {
+export function mount(element, { sectionId, blockId, lang, params }) {
   const editable = params.starter_code !== undefined;
   element.classList.add("benchmark", "block-card");
   element.dataset.state = "idle";
@@ -55,7 +55,7 @@ export function mount(element, { sectionId, blockId, params }) {
 
   const editor = editable
     ? ace.edit(element.querySelector(".editor"), {
-        mode: "ace/mode/python",
+        mode: aceMode(lang),
         theme: aceTheme(),
         value: params.starter_code,
         minLines: 9,
