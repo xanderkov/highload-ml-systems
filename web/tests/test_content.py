@@ -147,3 +147,6 @@ def test_section50_static_engine_is_the_starter():
     root = Path(os.environ.get("CONTENT_ROOT", "/app/content")) / "50-llm"
     assert (root / "harness" / "_lib" / "static_engine.py").read_bytes() == \
         (root / "snippets" / "engine_starter.py").read_bytes()
+    # Глава 4 сравнивает llama.cpp с эталоном задания — тоже копия в _lib.
+    assert (root / "harness" / "_lib" / "engine_ref.py").read_bytes() == \
+        (root / "snippets" / "engine_ref.py").read_bytes()

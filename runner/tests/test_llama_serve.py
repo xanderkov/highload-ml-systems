@@ -43,3 +43,37 @@ def test_bad_args_raise_with_stderr():
             pass
     assert "no-such-flag" in str(err.value)
     assert no_llama_left()
+
+
+def test_serve_works_without_library_path(monkeypatch):
+    # runner запускает харнесс с минимальным окружением, без LD_LIBRARY_PATH.
+    monkeypatch.delenv("LD_LIBRARY_PATH", raising=False)
+    _, service = stand.cpus()
+    with llama.serve(slots=2, ctx_total=512, cpus=service) as url:
+        assert url.startswith("http://127.0.0.1:")
+
+
+_OVERLOAD = """
+import sys
+sys.path[:0] = ["/app", {lib!r}]
+from app.sandbox import _limits
+_limits(2048)()
+import llama, llmload, stand
+
+if __name__ == "__main__":
+    load_cpu, service = stand.cpus()
+    with llama.serve(slots=1, ctx_total=256, cpus=service) as url:
+        r = llmload.run_http(url, llama.MODEL, rps=8, duration_s=5, mix=llmload.Mix(), load_cpu=load_cpu)
+    print("errors", r.errors(), r.first_error())
+"""
+
+
+def test_queue_of_requests_under_sandbox_limits(tmp_path):
+    # Под RLIMIT_AS задания очередь из десятков соединений роняла сервер:
+    # пул HTTP-потоков не мог создать поток (арены malloc), запросы — без ответа.
+    import subprocess
+    lib = os.path.join(_root, "50-llm", "harness", "_lib")
+    script = tmp_path / "overload.py"
+    script.write_text(_OVERLOAD.format(lib=lib))
+    proc = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, timeout=120, cwd=tmp_path)
+    assert "errors 0 None" in proc.stdout, proc.stdout + proc.stderr[-2000:]
