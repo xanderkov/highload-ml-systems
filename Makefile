@@ -1,4 +1,4 @@
-.PHONY: up down test test-repo test-web test-runner test-triton verify-content smoke
+.PHONY: up down test test-repo test-web test-runner test-triton test-llm verify-content smoke
 
 up:
 	docker compose up --build
@@ -22,7 +22,10 @@ test-runner:
 test-triton:
 	docker compose run --rm --build runner python -m pytest -q -m triton
 
-verify-content: test-triton
+test-llm:
+	docker compose run --rm --build --no-deps runner python -m pytest -q -m llm
+
+verify-content: test-triton test-llm
 	docker compose run --rm --build web python -m pytest -q -m content
 
 # Проверка страницы в браузере: pytest не исполняет модули страницы вовсе.

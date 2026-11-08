@@ -8,6 +8,12 @@ RUN if [ "$(uname -m)" = "x86_64" ]; then \
     fi
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# Раздел «LLM»: llama-server (с CPU-бэкендами от sse42 до avx512 — выбирает
+# сам по процессору) и модель GGUF; харнессы запускают сервер подпроцессом.
+COPY --from=ghcr.io/ggml-org/llama.cpp:server-b12199 /app /opt/llama
+ENV LD_LIBRARY_PATH=/opt/llama
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /opt/models && python -c "import urllib.request as u; u.urlretrieve('https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q8_0.gguf', '/opt/models/qwen05-q8.gguf')"
 COPY . .
 # RLIMIT_NPROC counts a UID's tasks across containers on the same kernel.
 # Avoid the shared development UID 1000, which can already exceed our limit.
