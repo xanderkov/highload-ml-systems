@@ -265,9 +265,11 @@ async def _read_response(reader: asyncio.StreamReader) -> tuple[int, bytes, bool
 
 
 async def _run(host: str, port: int, path: str, rps: float, duration_s: float,
-               make_body: Callable[[int], bytes], content_type: str, timeout_s: float):
+               make_body: Callable[[int], bytes], content_type: str, timeout_s: float,
+               headers: dict[str, str] | None = None):
     n = int(rps * duration_s)
-    head = (f"POST {path} HTTP/1.1\r\nHost: {host}:{port}\r\n"
+    extra = "".join(f"{k}: {v}\r\n" for k, v in (headers or {}).items())
+    head = (f"POST {path} HTTP/1.1\r\nHost: {host}:{port}\r\n{extra}"
             f"Content-Type: {content_type}\r\nContent-Length: ").encode()
     free: list = []
     for _ in range(min(_INITIAL_CONNECTIONS, max(n, 1))):
@@ -340,7 +342,7 @@ async def _run(host: str, port: int, path: str, rps: float, duration_s: float,
 
 def run_load(url: str, *, path: str = "/predict", rps: float, duration_s: float,
              make_body: Callable[[int], bytes], content_type: str, cpus: set[int],
-             timeout_s: float = 10) -> LoadResult:
+             timeout_s: float = 10, headers: dict[str, str] | None = None) -> LoadResult:
     """Открытая нагрузка: rps * duration_s POST-запросов по расписанию t0 + i / rps.
 
     Генератор работает в вызывающем потоке, на время замера привязанном к cpus.
@@ -348,6 +350,7 @@ def run_load(url: str, *, path: str = "/predict", rps: float, duration_s: float,
     lag = момент, когда тело готово, − план (планирование + make_body); ожидание соединения
     и ответа — это latency сервиса, а не lag генератора.
     Бросает LoadGeneratorLagging, если p99 отставания отправки от плана > 5 мс.
+    headers — дополнительные заголовки каждого запроса (одинаковые для всех).
     """
     host_port = url.split("://", 1)[1].rstrip("/")
     host, port = host_port.rsplit(":", 1)
@@ -355,7 +358,7 @@ def run_load(url: str, *, path: str = "/predict", rps: float, duration_s: float,
     os.sched_setaffinity(0, set(cpus))
     try:
         t0, end, lags, done_at, responses = asyncio.run(
-            _run(host, int(port), path, rps, duration_s, make_body, content_type, timeout_s))
+            _run(host, int(port), path, rps, duration_s, make_body, content_type, timeout_s, headers))
     finally:
         os.sched_setaffinity(0, old)
     latencies = [done_at[i] * 1e3 for i, r in enumerate(responses) if r is not None]
@@ -390,7 +393,8 @@ def service_cpus(available: set[int]) -> set[int]:
 
 
 def probe_capacity(url: str, body: bytes, content_type: str, *, cpus: set[int],
-                   connections: int = 8, seconds: float = 1.5, path: str = "/predict") -> float:
+                   connections: int = 8, seconds: float = 1.5, path: str = "/predict",
+                   headers: dict[str, str] | None = None) -> float:
     """Ответов в секунду при постоянной очереди: закрытый цикл в несколько соединений.
 
     Каждое соединение шлёт следующий запрос, как только получило ответ, —
@@ -407,7 +411,7 @@ def probe_capacity(url: str, body: bytes, content_type: str, *, cpus: set[int],
         conn = http.client.HTTPConnection(host, int(port), timeout=10)
         try:
             while time.perf_counter() < deadline:
-                conn.request("POST", path, body, {"Content-Type": content_type})
+                conn.request("POST", path, body, {**(headers or {}), "Content-Type": content_type})
                 response = conn.getresponse()
                 response.read()
                 if response.status != 200:

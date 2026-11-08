@@ -120,3 +120,16 @@ def test_summary_is_optional(tmp_path):
 
     assert load_section(plain).summary is None
     assert load_section(described).summary == "Одна строка."
+
+
+def test_section40_lib_copies_match_section30():
+    # _lib разделов независимы: раздел 40 держит копии библиотек раздела 30.
+    # Любая правка вносится в оба файла, иначе замеры разделов разойдутся.
+    import os
+    from pathlib import Path
+
+    root = Path(os.environ.get("CONTENT_ROOT", "/app/content"))
+    for name in ("servicelib.py", "widemodel.py"):
+        original = root / "30-naive-service" / "harness" / "_lib" / name
+        copy = root / "40-triton" / "harness" / "_lib" / name
+        assert copy.read_bytes() == original.read_bytes(), name

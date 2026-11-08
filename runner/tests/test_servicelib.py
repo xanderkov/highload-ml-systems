@@ -251,3 +251,25 @@ def test_service_stderr_tail_is_available(tmp_path):
     )
     with start_service(str(app), cpus=SERVICE) as url:
         assert "собственное сообщение сервиса" in url.stderr_tail()
+
+
+@pytest.fixture
+def echo_header_app():
+    return str(APPS / "svc_echo_header_app.py")
+
+
+def test_run_load_sends_extra_headers(echo_header_app):
+    # Triton binary extension требует заголовок Inference-Header-Content-Length.
+    with start_service(echo_header_app, cpus=SERVICE) as url:
+        result = run_load(url, rps=100, duration_s=0.2, make_body=lambda i: b"x", content_type=OCTET,
+                          cpus=LOAD, headers={"X-Probe": "42"})
+    assert result.errors == 0
+    assert result.responses == [b"42"] * 20
+
+
+def test_probe_capacity_sends_extra_headers(echo_header_app):
+    from servicelib import probe_capacity
+
+    with start_service(echo_header_app, cpus=SERVICE) as url:
+        capacity = probe_capacity(url, b"x", OCTET, cpus=LOAD, seconds=0.3, headers={"X-Probe": "1"})
+    assert capacity > 0
