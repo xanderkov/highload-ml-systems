@@ -44,7 +44,7 @@ async function mountBlock(element, sectionId) {
 /** Кнопка «копировать» у блоков кода в тексте статьи (не в заданиях). */
 function addCopyButtons() {
   for (const pre of document.querySelectorAll(".section pre")) {
-    if (pre.closest(".block") || pre.parentElement.classList.contains("code-wrap")) continue;
+    if (pre.closest(".block[data-kind]") || pre.parentElement.classList.contains("code-wrap")) continue;
     const wrap = document.createElement("div");
     wrap.className = "code-wrap";
     pre.replaceWith(wrap);
@@ -94,7 +94,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   mountThemeToggle();
   mountNav(sectionId);
   if (sectionId) {
-    for (const element of document.querySelectorAll(".block")) {
+    for (const element of document.querySelectorAll(".block[data-kind]")) {
       try {
         await mountBlock(element, sectionId);
       } catch (error) {
