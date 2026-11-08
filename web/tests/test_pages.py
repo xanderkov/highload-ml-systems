@@ -169,6 +169,19 @@ def test_real_course_lists_naive_service_after_python_runtime():
     assert page.status_code == 200
 
 
+def test_real_course_ends_with_llm_section():
+    root = main.content_root()
+    if not root.is_dir():
+        pytest.skip("контент не смонтирован")
+    html = TestClient(main.app).get("/").text
+    assert html.index('href="/section/triton"') < html.index('href="/section/llm"')
+    page = TestClient(main.app).get("/section/llm")
+    assert page.status_code == 200
+    assert "0. Генерация — это цикл" in page.text
+    triton = TestClient(main.app).get("/section/triton").text
+    assert 'href="/section/llm"' in triton
+
+
 def test_pages_use_course_title(client):
     home = client.get("/").text
     assert "Высоконагруженные ML/DL системы" in home
@@ -230,15 +243,11 @@ def test_home_cards_show_summary_and_progress(mixed):
     assert "Строка о разделе" in card and 'data-exercises="ex1"' in card and "data-progress" in card
 
 
-def test_home_has_soon_cards(mixed):
+def test_home_has_no_soon_cards(mixed):
+    # Все разделы курса написаны: карточек «скоро» больше нет.
     home = mixed.get("/").text
-    # Раздел про Triton уже написан: «скоро» осталось только LLM.
-    assert "скоро" in home and home.count("скоро") == 1
-    title = "LLM-сервинг"
-    assert title in home
-    before = home[: home.index(title)]
-    # Карточка «скоро» — не ссылка: последний открытый <a> перед ней закрыт.
-    assert before.rfind("<a ") < before.rfind("</a>")
+    assert "скоро" not in home
+    assert "LLM-сервинг" not in home
 
 
 def test_page_toc_lists_subheadings(mixed, tmp_path):

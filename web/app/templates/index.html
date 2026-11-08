@@ -25,15 +25,6 @@
       </a>
     </li>
     {% endfor %}
-    {% for soon in ["LLM-сервинг"] %}
-    <li>
-      <div class="flex gap-4 rounded-lg border border-dashed border-line px-5 py-4 text-muted">
-        <span class="font-mono text-sm tabular-nums">{{ "%02d" | format(course_nav | length + loop.index) }}</span>
-        <span class="min-w-0 flex-1 font-semibold">{{ soon }}</span>
-        <span class="shrink-0 self-start rounded-full bg-surface px-2 py-0.5 text-xs">скоро</span>
-      </div>
-    </li>
-    {% endfor %}
   </ol>
 </div>
 {% endblock %}

@@ -1,0 +1,6 @@
+kind: series
+lang: python
+# auto: харнесс сам задаёт три потока torch на трёх CPU сервиса.
+threads: auto
+timeout_s: 120
+memory_mb: 2048
