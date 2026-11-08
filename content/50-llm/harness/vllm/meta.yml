@@ -1,0 +1,6 @@
+kind: series
+lang: python
+# auto: vLLM — отдельный сервис compose (профиль vllm) на CPU сервиса.
+threads: auto
+timeout_s: 180
+memory_mb: 1024

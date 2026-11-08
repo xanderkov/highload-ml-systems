@@ -421,3 +421,31 @@ async def _run_http(url, model, rps, duration_s, mix, prompts) -> Result:
                         ttft_s=ts[0] - due if ts else None, e2e_s=ts[-1] - due if ts else None,
                         tokens=None, n_tokens=n, itl_s=[b - a for a, b in zip(ts, ts[1:])], error=error))
     return Result(recs, duration_s=duration_s, wall_s=last - t0)
+
+
+@dataclass
+class Stream:
+    times: list[float]
+    n_tokens: int
+    error: str | None
+
+
+def run_streams(url: str, model: str, plan: list[tuple[float, str, int]], *, load_cpu: int) -> tuple[float, list[Stream]]:
+    """Запросы по плану [(сдвиг от старта, с; текст промпта; max_tokens)].
+
+    Возвращает (t0, потоки): время старта по perf_counter и моменты прихода
+    токенов каждого запроса — чтобы видеть, как один запрос влияет на другие.
+    """
+    async def go():
+        host, port = _host_port(url)
+        t0 = time.perf_counter() + 0.05
+
+        async def at(offset, text, max_new):
+            await asyncio.sleep(max(0.0, t0 + offset - time.perf_counter()))
+            return await _one(host, port, model, text, max_new, t0 + offset)
+
+        done = await asyncio.wait_for(asyncio.gather(*(at(*item) for item in plan)), timeout=DRAIN_S)
+        return t0, [Stream(times, n, error) for times, n, error in done]
+
+    with _pinned(load_cpu):
+        return asyncio.run(go())

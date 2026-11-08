@@ -133,3 +133,13 @@ def test_fixture_engine_is_the_section_reference():
     snippet = os.path.join(_root, "50-llm", "snippets", "engine_ref.py")
     with open(fixture, "rb") as a, open(snippet, "rb") as b:
         assert a.read() == b.read()
+
+
+def test_run_streams_sends_at_offsets(sse_server):
+    if sse_server.fail:
+        pytest.skip("только успешный сервер")
+    url = f"http://127.0.0.1:{sse_server.server_address[1]}"
+    t0, out = llmload.run_streams(url, "q", [(0.0, "a", 3), (0.3, "b", 3)], load_cpu=cpus()["load_cpu"])
+    assert [o.error for o in out] == [None, None]
+    assert [o.n_tokens for o in out] == [3, 3]
+    assert out[0].times[0] - t0 < 0.3 <= out[1].times[0] - t0

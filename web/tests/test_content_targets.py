@@ -32,6 +32,9 @@ def blocks_of_kind(kind: str):
 
 
 EXERCISES = list(blocks_of_kind("exercise"))
+# Харнессы блоков, которым нужен необязательный сервис compose (профиль): без него
+# блок обязан объяснить, как сервис запустить (test_vllm_block_explains_when_absent).
+OPTIONAL_SERVICE_HARNESSES = {"vllm"}
 BENCHMARKS = list(blocks_of_kind("benchmark"))
 
 
@@ -116,6 +119,9 @@ def test_benchmark_block_runs(section, block):
     series-харнесс: набор линий, у каждой непустой список точек.
     """
     result = execute(section, block, "")
+    if block.params["harness"] in OPTIONAL_SERVICE_HARNESSES and result["status"] == "runtime_error" \
+            and "--profile vllm" in result["log"]:
+        pytest.skip("необязательный сервис не запущен; блок объяснил, как его запустить")
 
     assert result["status"] == "ok", result
     assert result["lines"], result
@@ -501,3 +507,14 @@ def test_kv_budget_too_many_slots_truncates():
     assert result["status"] == "ok", result
     assert result["correct"] is False and result["passed"] is False, result
     assert "обрезаны" in result["stderr"], result
+
+
+@pytest.mark.content
+def test_vllm_block_explains_when_absent():
+    section, block = find_block("llm", "llm-vllm")
+    result = execute(section, block, "")
+    if result["status"] == "ok":
+        pytest.skip("сервис vllm запущен — ветку «не запущен» здесь не проверить")
+    assert result["status"] == "runtime_error", result
+    assert "docker compose --profile vllm up -d vllm" in result["log"], result
+    assert "AVX-512" in result["log"], result
