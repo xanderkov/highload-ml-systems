@@ -45,53 +45,73 @@ def kv_bytes_per_token(cfg: Config = DEFAULT) -> int:
 
 
 class KVBatch:
-    """KV-кэши нескольких запросов: строка — запрос, паддинг справа."""
+    """KV-кэши нескольких запросов: строка — запрос, паддинг справа.
+
+    Тензоры выделяются с запасом по строкам и по длине: add() пишет только
+    новую строку, keep() двигает только те строки, что сменили номер, а шаг
+    работает с представлением первых len(self) строк без копирования.
+    """
 
     def __init__(self) -> None:
-        self.k: torch.Tensor | None = None  # [n_layer, rows, n_head, cap, head_dim]
+        self.k: torch.Tensor | None = None  # [n_layer, cap_rows, n_head, cap_len, head_dim]
         self.v: torch.Tensor | None = None
         self.lengths: list[int] = []
 
     def __len__(self) -> int:
         return len(self.lengths)
 
-    def _ensure(self, need: int) -> None:
-        cap = self.k.shape[3]
-        if need <= cap:
-            return
-        extra = math.ceil((need - cap) / GROW) * GROW
+    def _grow(self, dim: int, extra: int) -> None:
         pad = list(self.k.shape)
-        pad[3] = extra
-        self.k = torch.cat([self.k, self.k.new_zeros(pad)], dim=3)
-        self.v = torch.cat([self.v, self.v.new_zeros(pad)], dim=3)
+        pad[dim] = extra
+        # Кэш растёт и внутри decode_step (inference mode); тензоры кэша должны
+        # остаться обычными, иначе add() снаружи не сможет писать в них.
+        with torch.inference_mode(False):
+            self.k = torch.cat([self.k, self.k.new_zeros(pad)], dim=dim)
+            self.v = torch.cat([self.v, self.v.new_zeros(pad)], dim=dim)
+
+    def _ensure(self, need: int) -> None:
+        """Длины хватает на need позиций."""
+        cap = self.k.shape[3]
+        if need > cap:
+            self._grow(3, math.ceil((need - cap) / GROW) * GROW)
 
     def add(self, kv: KV) -> int:
         """Добавляет KV одного запроса последней строкой; возвращает её индекс."""
         k, v = kv
         n = k.shape[2]
         if self.k is None:
-            cap = math.ceil(max(n, 1) / GROW) * GROW
-            shape = (k.shape[0], 0, k.shape[1], cap, k.shape[3])
+            shape = (k.shape[0], 4, k.shape[1], math.ceil(max(n, 1) / GROW) * GROW, k.shape[3])
             self.k, self.v = k.new_zeros(shape), v.new_zeros(shape)
         self._ensure(n)
-        row_k = self.k.new_zeros((self.k.shape[0], 1, *self.k.shape[2:]))
-        row_v = torch.zeros_like(row_k)
-        row_k[:, 0, :, :n] = k
-        row_v[:, 0, :, :n] = v
-        self.k = torch.cat([self.k, row_k], dim=1)
-        self.v = torch.cat([self.v, row_v], dim=1)
+        row = len(self.lengths)
+        if row == self.k.shape[1]:
+            self._grow(1, self.k.shape[1])
+        self.k[:, row, :, :n] = k
+        self.v[:, row, :, :n] = v
         self.lengths.append(n)
-        return len(self.lengths) - 1
+        return row
 
     def keep(self, rows: list[int]) -> None:
         """Оставляет строки rows в этом порядке (остальные — освобождаются)."""
-        index = torch.tensor(rows, dtype=torch.long)
-        self.k = self.k.index_select(1, index)
-        self.v = self.v.index_select(1, index)
+        rows = list(rows)
+        for r in rows:
+            if not 0 <= r < len(self.lengths):
+                raise IndexError(f"keep: строки {r} нет, в батче {len(self.lengths)} строк")
+        if rows == sorted(set(rows)):
+            # Частый случай — убрали закончившиеся, порядок прежний: строки
+            # только сдвигаются вверх, копируем лишь сдвинутые.
+            for new, old in enumerate(rows):
+                if new != old:
+                    self.k[:, new] = self.k[:, old]
+                    self.v[:, new] = self.v[:, old]
+        elif rows:
+            index = torch.tensor(rows, dtype=torch.long)
+            self.k[:, :len(rows)] = self.k.index_select(1, index)
+            self.v[:, :len(rows)] = self.v.index_select(1, index)
         self.lengths = [self.lengths[r] for r in rows]
 
     def nbytes(self) -> int:
-        """Полезные байты кэша (без паддинга): сумма длин × байт на токен."""
+        """Полезные байты кэша (без паддинга и запаса): сумма длин × байт на токен."""
         if self.k is None:
             return 0
         per_token = 2 * self.k.shape[0] * self.k.shape[2] * self.k.shape[4] * self.k.element_size()
@@ -176,10 +196,11 @@ class TinyGPT(nn.Module):
         if int(pos.max()) >= self.cfg.max_len:
             raise ValueError(f"запрос длиннее {self.cfg.max_len} токенов")
         batch._ensure(int(pos.max()) + 1)
+        n = len(batch)
         mask = torch.arange(batch.k.shape[3])[None, :] <= pos[:, None]
         x = (self.tok(last) + self.pos(pos))[:, None]
         for i, block in enumerate(self.blocks):
-            x = block.step(x, batch.k[i], batch.v[i], pos, mask)
+            x = block.step(x, batch.k[i, :n], batch.v[i, :n], pos, mask)
         batch.lengths = [n + 1 for n in batch.lengths]
         return self.head(self.ln(x[:, 0])).argmax(dim=-1)
 

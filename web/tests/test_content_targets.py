@@ -424,3 +424,41 @@ def test_export_exception_shows_traceback():
     result = execute_exercise("triton", "export-exercise", code)
     assert result["status"] == "runtime_error", result
     assert "сломано" in result["log"], result
+
+
+# --- Раздел «LLM», задание 1: continuous batching ---------------------------------
+
+def engine_ref():
+    return read_snippet("engine_ref.py", "50-llm")
+
+
+@pytest.mark.content
+def test_engine_mixed_rows_is_incorrect():
+    # keep переставил строки KVBatch, а список запросов остался в старом порядке.
+    code = engine_ref().replace("batch.keep(keep)", "batch.keep(keep[::-1])")
+    result = execute_exercise("llm", "llm-engine", code)
+    skip_if_not_enough_cores(result)
+    assert result["status"] == "ok", result
+    assert result["correct"] is False and result["passed"] is False, result
+    assert "не совпали с генерацией в одиночку" in result["stderr"], result
+
+
+@pytest.mark.content
+def test_engine_never_drops_is_reported():
+    code = engine_ref()
+    start = code.index("        # Убрать закончившиеся")
+    end = code.index("        if not running:\n            continue")
+    code = code[:start] + code[end:]
+    result = execute_exercise("llm", "llm-engine", code)
+    skip_if_not_enough_cores(result)
+    assert result["status"] == "runtime_error", result
+    assert "уберите закончившиеся" in result["log"], result
+
+
+@pytest.mark.content
+def test_engine_exception_is_shown():
+    code = "def engine(model, inbox, max_batch):\n    raise RuntimeError('oops')\n"
+    result = execute_exercise("llm", "llm-engine", code)
+    skip_if_not_enough_cores(result)
+    assert result["status"] == "runtime_error", result
+    assert "RuntimeError: oops" in result["log"], result

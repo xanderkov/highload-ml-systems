@@ -81,3 +81,19 @@ def test_kv_bytes():
     assert tinygpt.kv_bytes_per_token(cfg) == 2 * cfg.n_layer * cfg.d_model * 4
     assert batch.lengths == [len(p) for p in PROMPTS]
     assert batch.nbytes() == sum(batch.lengths) * tinygpt.kv_bytes_per_token(cfg)
+
+
+def test_add_after_cache_grew_inside_step():
+    # Кэш растёт внутри decode_step (inference mode); add снаружи должен работать.
+    m = model()
+    batch = tinygpt.KVBatch()
+    first, kv = m.prefill(list(range(60)))
+    batch.add(kv)
+    out = [first]
+    for _ in range(10):  # 60 → 70 позиций: тензор кэша вырос за GROW = 64
+        out.append(int(m.decode_step(batch, torch.tensor([out[-1]]))[0]))
+    second, kv2 = m.prefill([5, 6, 7])
+    batch.add(kv2)
+    nxt = m.decode_step(batch, torch.tensor([out[-1], second])).tolist()
+    assert out + [nxt[0]] == tinygpt.generate_alone(m, list(range(60)), 12)
+    assert [second, nxt[1]] == tinygpt.generate_alone(m, [5, 6, 7], 2)

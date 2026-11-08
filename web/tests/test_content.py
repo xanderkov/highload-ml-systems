@@ -137,3 +137,13 @@ def test_section40_lib_copies_match_section30():
     for name, original in copies.items():
         copy = root / "40-triton" / "harness" / "_lib" / name
         assert copy.read_bytes() == original.read_bytes(), name
+
+
+def test_section50_static_engine_is_the_starter():
+    # Точка сравнения главы 3 — стартовый код задания, копия в _lib.
+    import os
+    from pathlib import Path
+
+    root = Path(os.environ.get("CONTENT_ROOT", "/app/content")) / "50-llm"
+    assert (root / "harness" / "_lib" / "static_engine.py").read_bytes() == \
+        (root / "snippets" / "engine_starter.py").read_bytes()

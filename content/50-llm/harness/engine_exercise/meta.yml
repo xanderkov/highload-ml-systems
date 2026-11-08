@@ -1,0 +1,10 @@
+kind: ab
+lang: python
+# auto: движок работает в своём процессе с тремя потоками torch на CPU сервиса.
+threads: auto
+sizes: [1]
+warmup: 0
+repeats: 3
+timeout_s: 240
+memory_mb: 2048
+tolerance: 0

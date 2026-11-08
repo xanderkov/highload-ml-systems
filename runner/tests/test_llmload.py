@@ -125,3 +125,11 @@ def test_goodput_counts_truncated_as_bad():
     assert result.truncated() == 1
     assert result.errors() == 1
     assert result.goodput(ttft_slo_s=0.5) == pytest.approx(0.5)  # 1 хороший за 2 с
+
+
+def test_fixture_engine_is_the_section_reference():
+    # Тест движка выше гоняет тот же код, что эталон задания раздела.
+    fixture = os.path.join(os.path.dirname(__file__), "fixtures", "engine_ref.py")
+    snippet = os.path.join(_root, "50-llm", "snippets", "engine_ref.py")
+    with open(fixture, "rb") as a, open(snippet, "rb") as b:
+        assert a.read() == b.read()
