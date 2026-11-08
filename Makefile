@@ -1,4 +1,4 @@
-.PHONY: up down test test-repo test-web test-runner verify-content smoke
+.PHONY: up down test test-repo test-web test-runner test-triton verify-content smoke
 
 up:
 	docker compose up --build
@@ -18,7 +18,11 @@ test-web:
 test-runner:
 	docker compose run --rm --build --no-deps runner python -m pytest -q
 
-verify-content:
+# Тесты, которым нужен поднятый сервис triton (tritonlib, репозиторий моделей).
+test-triton:
+	docker compose run --rm --build runner python -m pytest -q -m triton
+
+verify-content: test-triton
 	docker compose run --rm --build web python -m pytest -q -m content
 
 # Проверка страницы в браузере: pytest не исполняет модули страницы вовсе.

@@ -17,11 +17,36 @@ services:
     init: true  # reap убитых потомков заданий (иначе остаются zombie)
     volumes:
       - ./content:/content:ro
+      - model_repo:/models
     environment:
       CONTENT_ROOT: /content
     networks: [back]
+    depends_on:
+      triton:
+        condition: service_healthy
     tmpfs:
       - /work:size=512m,mode=1777
+
+  # Triton Inference Server для раздела «Triton»: модели грузит runner
+  # (--model-control-mode=explicit) из общего тома model_repo. Серверу — те же
+  # 3 CPU, что сервису в разделе 30 (SERVICE_MAX_CPUS); генератор нагрузки
+  # runner'а прибит к CPU 0, вне этого набора.
+  triton:
+    build: ./triton
+    cpuset: "${TRITON_CPUS:-1-3}"
+    mem_limit: 4g
+    shm_size: 1g  # python backend передаёт тензоры через /dev/shm
+    volumes:
+      - model_repo:/models:ro
+    networks: [back]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/v2/health/live"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  model_repo:
 
 networks:
   front:

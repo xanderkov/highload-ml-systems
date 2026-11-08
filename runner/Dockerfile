@@ -12,6 +12,9 @@ COPY . .
 # RLIMIT_NPROC counts a UID's tasks across containers on the same kernel.
 # Avoid the shared development UID 1000, which can already exceed our limit.
 RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin bench \
- && chown -R bench:bench /app
+ && chown -R bench:bench /app \
+ && mkdir /models && chown bench:bench /models
+# /models — точка монтирования тома model_repo (репозиторий моделей Triton):
+# новый именованный том наследует владельца каталога образа.
 USER bench
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
