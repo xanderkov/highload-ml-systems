@@ -31,6 +31,7 @@ METRICS = textwrap.dedent("""\
     nv_inference_exec_count{model="m",version="1"} 4
     nv_inference_queue_duration_us{model="m",version="1"} 1500
     nv_inference_compute_infer_duration_us{model="m",version="1"} 8000
+    nv_inference_request_duration_us{model="m",version="1"} 12000
     nv_cpu_utilization 0.25
 """)
 
@@ -79,6 +80,7 @@ def test_parse_metrics_sums_versions_and_ignores_other_models():
     assert m["exec_count"] == 4
     assert m["queue_us"] == 1500
     assert m["compute_us"] == 8000
+    assert m["request_us"] == 12000
     assert m["cpu_util"] == 0.25
 
 
@@ -165,3 +167,11 @@ def test_io_problem_wrong_input_name():
     config = dict(GOOD_CONFIG, input=[{"name": "input", "data_type": "TYPE_FP32", "dims": ["3", "64", "64"]}])
     problem = tritonlib.io_problem(config)
     assert "INPUT__0" in problem and "input TYPE_FP32" in problem
+
+
+def test_log_errors_since_survives_truncated_log(tmp_path, monkeypatch):
+    # Сервер обрезает свой лог, когда тот растёт; старое смещение тогда больше файла.
+    log = tmp_path / "server.log"
+    log.write_text('E1108 05:58:54.272044 1 x.cc:1] "Poll failed for model directory \'m-1\': bad"\n')
+    monkeypatch.setattr(tritonlib, "SERVER_LOG", log)
+    assert tritonlib._log_errors_since(10_000, "m-1") == ["Poll failed for model directory 'm-1': bad"]

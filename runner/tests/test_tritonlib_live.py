@@ -149,3 +149,14 @@ def test_infer_error_carries_server_message():
     with tritonlib.server_lock(), tritonlib.deploy(name, CONFIG, tritonlib.python_model_files()):
         with pytest.raises(tritonlib.TritonInferError, match="битый вход"):
             tritonlib.infer(name, bad)
+
+
+def test_reload_adds_second_version(x):
+    name = tritonlib.unique_name("t")
+    files = tritonlib.python_model_files()
+    with tritonlib.server_lock(), tritonlib.deploy(name, CONFIG, files):
+        v2 = {path.replace("1/", "2/", 1): data for path, data in files.items()}
+        took = tritonlib.reload(name, CONFIG + "version_policy: { all { } }\n", v2)
+        assert took > 0
+        ready = {m["version"] for m in index() if m["name"] == name and m.get("state") == "READY"}
+        assert ready == {"1", "2"}

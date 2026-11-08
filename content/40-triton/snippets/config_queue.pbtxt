@@ -1,0 +1,19 @@
+# Очередь с таймаутом: запрос, который прождал в очереди дольше 20 мс,
+# сразу получает отказ — клиент узнаёт о перегрузке, а не ждёт секунды.
+backend: "python"
+# Маленький батч — чтобы перегрузить сервер умеренной нагрузкой.
+max_batch_size: 4
+input [
+  { name: "INPUT__0" data_type: TYPE_FP32 dims: [ 3, 64, 64 ] }
+]
+output [
+  { name: "OUTPUT__0" data_type: TYPE_FP32 dims: [ 10 ] }
+]
+instance_group [ { count: 1 kind: KIND_CPU } ]
+parameters: { key: "TORCH_THREADS" value: { string_value: "3" } }
+dynamic_batching {
+  default_queue_policy {
+    timeout_action: REJECT
+    default_timeout_microseconds: 20000
+  }
+}

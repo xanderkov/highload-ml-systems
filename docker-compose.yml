@@ -14,6 +14,10 @@ services:
   runner:
     build: ./runner
     mem_limit: 3g
+    # Генератор нагрузки держит по соединению на каждый запрос в полёте: под
+    # перегрузкой их тысячи, а мягкий лимит Docker по умолчанию — 1024.
+    ulimits:
+      nofile: 65536
     init: true  # reap убитых потомков заданий (иначе остаются zombie)
     volumes:
       - ./content:/content:ro
@@ -37,6 +41,14 @@ services:
     cpuset: "${TRITON_CPUS:-1-3}"
     mem_limit: 4g
     shm_size: 1g  # python backend передаёт тензоры через /dev/shm
+    # Каждое соединение — дескриптор. При лимите 1024 перегруженный сервер
+    # переставал принимать соединения и в цикле писал «Too many open files».
+    ulimits:
+      nofile: 65536
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "2"
     volumes:
       - model_repo:/models:ro
       - triton_log:/var/log/triton

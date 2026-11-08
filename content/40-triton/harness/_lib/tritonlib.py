@@ -52,6 +52,7 @@ _MODEL_COUNTERS = {
     "nv_inference_exec_count": "exec_count",
     "nv_inference_queue_duration_us": "queue_us",
     "nv_inference_compute_infer_duration_us": "compute_us",
+    "nv_inference_request_duration_us": "request_us",
 }
 _SAMPLE = re.compile(r'^(\w+)(?:\{([^}]*)\})?\s+(\S+)$')
 _LABEL = re.compile(r'(\w+)="([^"]*)"')
@@ -99,7 +100,8 @@ def _log_errors_since(offset: int, name: str) -> list[str]:
     """Строки ошибок из вывода сервера, записанные после offset и относящиеся к модели."""
     try:
         with SERVER_LOG.open("rb") as handle:
-            handle.seek(offset)
+            # Лог мог быть обрезан сервером (triton/entrypoint.sh) — тогда читаем с начала.
+            handle.seek(offset if offset <= SERVER_LOG.stat().st_size else 0)
             text = handle.read().decode(errors="replace")
     except OSError:
         return []
@@ -181,6 +183,28 @@ def deploy(name: str, config: str, files: dict[str, bytes]):
         with contextlib.suppress(TritonUnavailable):
             _unload_and_wait({name})
         shutil.rmtree(root, ignore_errors=True)
+
+
+def reload(name: str, config: str, files: dict[str, bytes]) -> float:
+    """Дописать файлы модели (например, новую версию), заменить конфиг и перезагрузить.
+
+    Модель уже загружена через deploy; Triton загружает новое рядом и
+    переключается, когда оно готово. Возвращает время загрузки, с.
+    """
+    root = REPO / name
+    for path, data in files.items():
+        target = root / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    (root / "config.pbtxt").write_text(_NAME_LINE.sub("", config), encoding="utf-8")
+    started = time.monotonic()
+    offset = _log_offset()
+    status, raw = _call("POST", f"/v2/repository/models/{name}/load", b"{}")
+    if status != 200:
+        details = "\n".join(_log_errors_since(offset, name))
+        raise TritonLoadError(f"Triton не перезагрузил модель: {_error_text(raw)}"
+                              + (f"\nСервер написал:\n{details}" if details else ""))
+    return time.monotonic() - started
 
 
 def model_config(name: str) -> dict:
