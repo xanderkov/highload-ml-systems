@@ -9,6 +9,8 @@ servicelib.service_cpus), поэтому сравнение Triton с серви
 from __future__ import annotations
 
 import contextlib
+import gc
+import socket
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -84,7 +86,21 @@ class Target:
         return wrong
 
 
+def by_address(url: str) -> str:
+    """URL с IP вместо имени хоста.
+
+    asyncio.open_connection по имени зовёт getaddrinfo в пуле потоков на
+    каждое новое соединение. Под перегрузкой соединений тысячи, потоки и их
+    арены malloc упираются в лимит памяти задания (RLIMIT_AS) — генератор
+    падает с MemoryError. Имя сервера резолвим один раз.
+    """
+    scheme, rest = url.split("://", 1)
+    host, port = rest.rstrip("/").rsplit(":", 1)
+    return f"{scheme}://{socket.gethostbyname(host)}:{port}"
+
+
 def triton_target(url: str, name: str, inputs: Inputs, *, binary: bool = True) -> Target:
+    url = by_address(url)
     pairs = [tritonlib.v2_body(a, binary=binary) for a in inputs.arrays]
     # Форма у всех входов одна, поэтому и длина JSON-заголовка одна на все тела.
     return Target(url, f"/v2/models/{name}/infer", [b for b, _ in pairs], tritonlib.content_type(binary=binary),
@@ -111,14 +127,22 @@ def load(target: Target, rps: float, duration_s: float, cpus: set[int], *, timeo
     """Открытая нагрузка; разовое отставание генератора (соседние процессы) — один повтор."""
     kwargs = dict(path=target.path, rps=rps, duration_s=duration_s, make_body=target.body,
                   content_type=target.content_type, cpus=cpus, timeout_s=timeout_s, headers=target.headers)
+    # Циклический сборщик мусора на время замера выключен: под перегрузкой у
+    # генератора сотни ожидающих соединений и задач, и полный проход сборщика
+    # останавливал event loop на десятки миллисекунд — генератор отставал от
+    # расписания (в нашем замере 3 запуска задания из 5 на стартовом конфиге).
+    gc.disable()
     try:
         return servicelib.run_load(target.url, **kwargs)
     except servicelib.LoadGeneratorLagging:
         try:
             return servicelib.run_load(target.url, **kwargs)
         except servicelib.LoadGeneratorLagging as exc:
-            fail(f"генератор нагрузки не успел отправить запросы по расписанию — скорее всего, машина "
-                 f"занята другими процессами; запустите ещё раз ({exc})")
+            fail(f"генератор нагрузки не успел отправить запросы по расписанию ({rps:.0f} RPS, "
+                 f"{duration_s:.1f} с) — скорее всего, машина занята другими процессами; "
+                 f"запустите ещё раз ({exc})")
+    finally:
+        gc.enable()
 
 
 def capacity(target: Target, cpus: set[int], *, connections: int = 8, seconds: float = 1.5) -> float:

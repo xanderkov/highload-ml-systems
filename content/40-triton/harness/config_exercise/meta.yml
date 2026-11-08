@@ -1,0 +1,10 @@
+kind: ab
+lang: pbtxt
+# auto: потоки torch на сервере задаёт конфиг (TORCH_THREADS).
+threads: auto
+sizes: [1]
+warmup: 0
+repeats: 3
+timeout_s: 120
+memory_mb: 2048
+tolerance: 0

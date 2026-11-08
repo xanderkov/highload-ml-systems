@@ -326,3 +326,46 @@ def test_batcher_busy_wait_is_warned():
     skip_if_not_enough_cores(result)
     assert result["status"] == "ok", result
     assert "busy-wait" in result["stderr"], result
+
+
+# --- Раздел 40, задание «config.pbtxt»: типовые ошибки конфига -------------
+
+def triton_config(**replace):
+    """Эталонный конфиг задания с заменами строк: {старое: новое}."""
+    text = read_snippet("config_ref.pbtxt", "40-triton")
+    for old, new in replace.items():
+        assert old in text, old
+        text = text.replace(old, new)
+    return text
+
+
+@pytest.mark.content
+def test_config_exercise_broken_syntax_shows_triton_error():
+    code = triton_config(**{"max_batch_size: 32": "max_batch_sise: 32"})
+    result = execute_exercise("triton", "config-exercise", code)
+    assert result["status"] == "runtime_error", result
+    assert "max_batch_sise" in result["log"], result
+
+
+@pytest.mark.content
+def test_config_exercise_zero_batch_size_is_explained():
+    code = triton_config(**{"max_batch_size: 32": "max_batch_size: 0"})
+    result = execute_exercise("triton", "config-exercise", code)
+    assert result["status"] == "runtime_error", result
+    assert "max_batch_size" in result["log"], result
+
+
+@pytest.mark.content
+def test_config_exercise_huge_delay_fails_rare_load():
+    code = triton_config(**{"dynamic_batching {": "dynamic_batching {\n  max_queue_delay_microseconds: 2000000"})
+    result = execute_exercise("triton", "config-exercise", code)
+    assert result["status"] == "runtime_error", result
+    assert "редких" in result["log"], result
+
+
+@pytest.mark.content
+def test_config_exercise_wrong_io_names():
+    code = triton_config(**{'name: "INPUT__0"': 'name: "input"'})
+    result = execute_exercise("triton", "config-exercise", code)
+    assert result["status"] == "runtime_error", result
+    assert "INPUT__0" in result["log"], result

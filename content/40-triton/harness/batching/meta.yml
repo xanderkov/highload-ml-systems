@@ -1,0 +1,6 @@
+kind: series
+lang: pbtxt
+# auto: потоки torch задают конфиг Triton и start_service сервиса раздела 30.
+threads: auto
+timeout_s: 180
+memory_mb: 2048

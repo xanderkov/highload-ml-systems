@@ -144,3 +144,24 @@ def test_server_lock_times_out(tmp_path):
                 print("busy", exc)
         """)], capture_output=True, text=True, timeout=30)
     assert holder.stdout.startswith("busy")
+
+
+GOOD_CONFIG = {
+    "max_batch_size": 32,
+    "input": [{"name": "INPUT__0", "data_type": "TYPE_FP32", "dims": ["3", "64", "64"]}],
+    "output": [{"name": "OUTPUT__0", "data_type": "TYPE_FP32", "dims": ["10"]}],
+}
+
+
+def test_io_problem_accepts_stand_config():
+    assert tritonlib.io_problem(GOOD_CONFIG) is None
+
+
+def test_io_problem_zero_batch():
+    assert "max_batch_size" in tritonlib.io_problem(dict(GOOD_CONFIG, max_batch_size=0))
+
+
+def test_io_problem_wrong_input_name():
+    config = dict(GOOD_CONFIG, input=[{"name": "input", "data_type": "TYPE_FP32", "dims": ["3", "64", "64"]}])
+    problem = tritonlib.io_problem(config)
+    assert "INPUT__0" in problem and "input TYPE_FP32" in problem

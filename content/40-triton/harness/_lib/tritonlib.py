@@ -179,6 +179,31 @@ def deploy(name: str, config: str, files: dict[str, bytes]):
         shutil.rmtree(root, ignore_errors=True)
 
 
+def model_config(name: str) -> dict:
+    """Конфиг загруженной модели так, как его понял сервер (JSON)."""
+    status, raw = _call("GET", f"/v2/models/{name}/config")
+    if status != 200:
+        raise TritonLoadError(f"сервер не отдал конфиг модели: {_error_text(raw)}")
+    return json.loads(raw)
+
+
+def io_problem(config: dict) -> str | None:
+    """Чем входы, выходы и батч конфига не подходят к widemodel и стенду, или None."""
+    if int(config.get("max_batch_size", 0)) < 1:
+        return ("max_batch_size: 0 значит, что модель не принимает батч: Triton не добавляет измерение "
+                "батча, и запросы формы [1, 3, 64, 64] не подходят к dims [3, 64, 64]. "
+                "Нужен max_batch_size ≥ 1")
+    want = {"input": (INPUT_NAME, "TYPE_FP32", ["3", "64", "64"]), "output": (OUTPUT_NAME, "TYPE_FP32", ["10"])}
+    for kind, (name, dtype, dims) in want.items():
+        tensors = config.get(kind, [])
+        got = [(t.get("name"), t.get("data_type"), [str(d) for d in t.get("dims", [])]) for t in tensors]
+        if got != [(name, dtype, dims)]:
+            shown = ", ".join(f"{n} {d} {dm}" for n, d, dm in got) or "ничего"
+            return (f"{kind}: ожидается один тензор {name} {dtype} [{', '.join(dims)}] "
+                    f"(так его называет model.py и шлёт стенд), а в конфиге: {shown}")
+    return None
+
+
 def python_model_files() -> dict[str, bytes]:
     """Файлы версии 1 модели python backend: model.py и widemodel.py."""
     return {

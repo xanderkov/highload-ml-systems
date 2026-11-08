@@ -1,0 +1,12 @@
+# Сейчас: модель исполняет запросы по одному. Включите dynamic batching.
+backend: "python"
+max_batch_size: 32
+input [
+  { name: "INPUT__0" data_type: TYPE_FP32 dims: [ 3, 64, 64 ] }
+]
+output [
+  { name: "OUTPUT__0" data_type: TYPE_FP32 dims: [ 10 ] }
+]
+instance_group [ { count: 1 kind: KIND_CPU } ]
+# Потоки torch на экземпляр: 3, как у сервиса из раздела 30.
+parameters: { key: "TORCH_THREADS" value: { string_value: "3" } }
