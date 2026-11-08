@@ -130,8 +130,8 @@ Triton — набор механизмов, которые включаются 
 - **несколько моделей и версий**: вторая версия загружается рядом без
   остановки, нагрузка на первую в это время — без ошибок;
 - **метрики**: Prometheus на `:8002` — время в очереди, время вычисления,
-  реальный размер батча (`nv_inference_exec_count` против
-  `nv_inference_request_success`).
+  реальный размер батча (`nv_inference_count` против
+  `nv_inference_exec_count`).
 
 ### 6. Вывод и мост к LLM
 
@@ -166,7 +166,7 @@ Triton — набор механизмов, которые включаются 
   изменения поведения раздела 30);
 - `parse_v2_response(bytes) -> np.ndarray` для проверки ответов;
 - `metrics(name) -> dict` — разбор Prometheus-текста по модели, дельта за
-  ступень (очередь, вычисление, exec_count, request_success).
+  ступень (очередь, вычисление, inference_count, exec_count, request_success).
 - CPU сервера: из метрик Triton, если версия их отдаёт (проверка в спайке),
   иначе CPU в графиках раздела не показываем.
 
@@ -205,11 +205,41 @@ Triton — набор механизмов, которые включаются 
 
 ## 7. Открытые вопросы
 
-1. **Спайк (первая задача плана)**: тег `tritonserver`, который работает
-   CPU-only с python и libtorch backend; размер образа и время старта;
-   отдаёт ли сервер метрики CPU; ведёт ли себя explicit load/unload чисто
-   при многократной смене конфига (если нет — переходим к варианту B:
-   перезапуск сервера на задание, решение фиксируется здесь).
+1. **Решено (спайк 2026-11-08, машина разработки, 16 CPU).**
+   - Образ: `nvcr.io/nvidia/tritonserver:26.10-pyt-python-py3` (только
+     python и pytorch backend, 12 ГБ). Своего `torch` для python backend в нём
+     нет: `pip install --index-url https://download.pytorch.org/whl/cpu
+     "torch~=2.15" "numpy<2"` (флаг `--break-system-packages`), итог 13,3 ГБ.
+   - **nvcr.io из РФ отдаёт 403** (реестр и каталог NGC). На машине разработки
+     решено правилом прокси на роутере для `nvcr.io` и `nvidia.com`. Студентам
+     в той же ситуации нужен VPN или зеркало — README говорит об этом прямо.
+     PyPI-пакет `tritonserver` (2.74.0) — только in-process биндинги
+     (276 КБ), сервера в нём нет.
+   - CPU-only работают оба backend: сервер стартует за ~1 с, python-модель
+     грузится ~3,4 с, libtorch ~0,05 с (0,12 с при 3 экземплярах); ответы
+     совпадают с eager `widemodel` (`allclose`, 1e-4) на батче 7.
+   - Экспорт: `torch.jit.trace` в torch 2.15 работает, но помечен deprecated
+     (FutureWarning: «switch to torch.compile or torch.export») — глава 4
+     говорит об этом. Файл `model.pt` — 118 МБ.
+   - Explicit load/unload чист: 30 циклов со сменой модели, числа
+     экземпляров (1/3) и `dynamic_batching` — конфиг каждый раз новый
+     (`/v2/models/<n>/config`), 0 неверных ответов из 1500, память сервера
+     после выгрузки ~345 МиБ (до циклов 650 МиБ). Вариант B не нужен.
+     **Unload асинхронный**: ответ приходит, когда модель ещё `UNLOADING`, а
+     процесс-заглушка python backend живёт ещё несколько секунд — `deploy`
+     ждёт состояния `UNAVAILABLE` в `/v2/repository/index`.
+   - Метрики CPU-only есть: `nv_cpu_utilization`, `nv_cpu_memory_used_bytes`;
+     по модели — `nv_inference_request_success`, `nv_inference_count`
+     (элементов), `nv_inference_exec_count` (запусков модели),
+     `nv_inference_queue_duration_us`, `nv_inference_compute_infer_duration_us`,
+     `nv_inference_request_failure{reason=…}` (OTHER/BACKEND/CANCELED/REJECTED),
+     `nv_inference_pending_request_count`. Средний батч = `nv_inference_count /
+     nv_inference_exec_count`.
+   - Потоки torch на экземпляр python backend: `parameters { key:
+     "TORCH_THREADS" value { string_value: "3" } }`, читается в `initialize`
+     из `args["model_config"]` — проверено (`torch.get_num_threads()` 1 и 3).
+     Для libtorch — параметр backend `INTRA_OP_THREAD_COUNT` (проверяется в
+     задаче главы 4).
 2. Калибровка: ступени, SLO, пороги заданий, сетка подглавы 3 — по замерам
    на машине разработки (16 CPU, серверу 3), таблица как §7.x раздела 30.
 3. Поддерживает ли редактор блоков подсветку `protobuf`; если нет —
