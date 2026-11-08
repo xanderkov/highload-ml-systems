@@ -18,6 +18,7 @@ services:
     volumes:
       - ./content:/content:ro
       - model_repo:/models
+      - triton_log:/triton-log:ro
     environment:
       CONTENT_ROOT: /content
     networks: [back]
@@ -38,6 +39,7 @@ services:
     shm_size: 1g  # python backend передаёт тензоры через /dev/shm
     volumes:
       - model_repo:/models:ro
+      - triton_log:/var/log/triton
     networks: [back]
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8000/v2/health/live"]
@@ -47,6 +49,7 @@ services:
 
 volumes:
   model_repo:
+  triton_log:  # вывод сервера: runner читает ошибки загрузки моделей
 
 networks:
   front:

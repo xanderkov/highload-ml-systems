@@ -5,4 +5,8 @@ FROM nvcr.io/nvidia/tritonserver:26.10-pyt-python-py3
 # CPU-сборка, как в runner: колесо по умолчанию тянет гигабайты CUDA.
 RUN pip install --no-cache-dir --break-system-packages \
       --index-url https://download.pytorch.org/whl/cpu "torch~=2.15" "numpy<2"
-CMD ["tritonserver", "--model-repository=/models", "--model-control-mode=explicit"]
+RUN mkdir -p /var/log/triton && chmod 755 /var/log/triton
+COPY entrypoint.sh /usr/local/bin/triton-entrypoint
+# Штатный entrypoint NVIDIA (баннер, проверки окружения) остаётся первым.
+ENTRYPOINT ["/opt/nvidia/nvidia_entrypoint.sh", "/usr/local/bin/triton-entrypoint"]
+CMD []
