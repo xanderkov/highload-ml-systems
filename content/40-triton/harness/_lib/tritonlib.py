@@ -39,7 +39,12 @@ UNLOAD_TIMEOUT_S = 30
 # Прокси из окружения к серверу в сети compose не нужен и только мешает.
 _NO_PROXY = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 # Строка name: верхнего уровня config.pbtxt: имя модели задаёт каталог.
-_NAME_LINE = re.compile(r'^\s*name\s*:\s*"[^"]*"\s*$', re.MULTILINE)
+_NAME_LINE = re.compile(r'^\s*name\s*:\s*"[^"]*"\s*$')
+# Экземпляров модели не больше: каждый — процесс с torch и копией весов, а у
+# контейнера сервера 4 ГиБ памяти.
+MAX_INSTANCES = 4
+# Удержания server_lock этим процессом: путь → глубина (блокировка реентерабельна).
+_held: dict[str, int] = {}
 LOCK_PATH = str(REPO / ".lock")
 INPUT_NAME = "INPUT__0"
 OUTPUT_NAME = "OUTPUT__0"
@@ -162,7 +167,7 @@ def deploy(name: str, config: str, files: dict[str, bytes]):
     root = REPO / name
     try:
         root.mkdir(parents=True)
-        (root / "config.pbtxt").write_text(_NAME_LINE.sub("", config), encoding="utf-8")
+        (root / "config.pbtxt").write_text(strip_model_name(config), encoding="utf-8")
         for path, data in files.items():
             target = root / path
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -196,7 +201,7 @@ def reload(name: str, config: str, files: dict[str, bytes]) -> float:
         target = root / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
-    (root / "config.pbtxt").write_text(_NAME_LINE.sub("", config), encoding="utf-8")
+    (root / "config.pbtxt").write_text(strip_model_name(config), encoding="utf-8")
     started = time.monotonic()
     offset = _log_offset()
     status, raw = _call("POST", f"/v2/repository/models/{name}/load", b"{}")
@@ -217,6 +222,10 @@ def model_config(name: str) -> dict:
 
 def io_problem(config: dict) -> str | None:
     """Чем входы, выходы и батч конфига не подходят к widemodel и стенду, или None."""
+    instances = sum(int(group.get("count", 1)) for group in config.get("instance_group", []))
+    if instances > MAX_INSTANCES:
+        return (f"instance_group: count в сумме {instances} — больше {MAX_INSTANCES} экземпляров модели. Каждый экземпляр — "
+                f"отдельный процесс с torch и своей копией весов; столько не помещается в память сервера")
     if int(config.get("max_batch_size", 0)) < 1:
         return ("max_batch_size: 0 значит, что модель не принимает батч: Triton не добавляет измерение "
                 "батча, и запросы формы [1, 3, 64, 64] не подходят к dims [3, 64, 64]. "
@@ -261,6 +270,35 @@ def read_metrics() -> str:
             return response.read().decode()
     except OSError as exc:
         raise TritonUnavailable(f"сервер Triton недоступен ({METRICS_URL}): {exc}") from None
+
+
+def strip_model_name(config: str) -> str:
+    """config.pbtxt без строки name: верхнего уровня; строка становится пустой.
+
+    Вложенные name: (входы, выходы) остаются: уровень вложенности считается
+    по скобкам {} и [] вне строк и комментариев. Число строк не меняется —
+    номера строк в сообщениях Triton совпадают с текстом студента.
+    """
+    depth = 0
+    lines = config.split("\n")
+    for k, line in enumerate(lines):
+        if depth == 0 and _NAME_LINE.match(line):
+            lines[k] = ""
+            continue
+        in_string = False
+        for i, ch in enumerate(line):
+            if in_string:
+                if ch == '"' and line[i - 1] != "\\":
+                    in_string = False
+            elif ch == '"':
+                in_string = True
+            elif ch == "#":
+                break
+            elif ch in "{[":
+                depth += 1
+            elif ch in "}]":
+                depth = max(0, depth - 1)
+    return "\n".join(lines)
 
 
 def content_type(*, binary: bool = True) -> str:
@@ -334,7 +372,18 @@ def unique_name(prefix: str) -> str:
 
 @contextlib.contextmanager
 def server_lock(timeout_s: float = 120, path: str = LOCK_PATH):
-    """Монопольный доступ к серверу Triton на время замера."""
+    """Монопольный доступ к серверу Triton на время замера.
+
+    Реентерабельна внутри процесса: харнесс берёт её на весь замер, а deploy
+    внутри — повторно, без ожидания.
+    """
+    if _held.get(path):
+        _held[path] += 1
+        try:
+            yield
+        finally:
+            _held[path] -= 1
+        return
     with open(path, "a") as handle:
         try:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -351,7 +400,9 @@ def server_lock(timeout_s: float = 120, path: str = LOCK_PATH):
                             f"сервер Triton занят другим замером дольше {timeout_s:.0f} с; "
                             f"дождитесь его окончания и запустите ещё раз") from None
                     time.sleep(0.1)
+        _held[path] = 1
         try:
             yield
         finally:
+            _held[path] = 0
             fcntl.flock(handle, fcntl.LOCK_UN)

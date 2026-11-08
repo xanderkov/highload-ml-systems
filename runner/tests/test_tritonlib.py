@@ -175,3 +175,45 @@ def test_log_errors_since_survives_truncated_log(tmp_path, monkeypatch):
     log.write_text('E1108 05:58:54.272044 1 x.cc:1] "Poll failed for model directory \'m-1\': bad"\n')
     monkeypatch.setattr(tritonlib, "SERVER_LOG", log)
     assert tritonlib._log_errors_since(10_000, "m-1") == ["Poll failed for model directory 'm-1': bad"]
+
+
+MULTILINE_CONFIG = '''name: "student"
+backend: "python"
+max_batch_size: 32
+
+input [
+  {
+    name: "INPUT__0"
+    data_type: TYPE_FP32
+    dims: [ 3, 64, 64 ]
+  }
+]
+output [ { name: "OUTPUT__0" data_type: TYPE_FP32 dims: [ 10 ] } ]
+'''
+
+
+def test_strip_model_name_keeps_nested_names_and_line_numbers():
+    stripped = tritonlib.strip_model_name(MULTILINE_CONFIG)
+    lines = stripped.split("\n")
+    assert lines[0].strip() == ""
+    assert '    name: "INPUT__0"' in lines
+    assert len(lines) == len(MULTILINE_CONFIG.split("\n"))
+
+
+def test_strip_model_name_ignores_comments_and_strings():
+    config = '# name: "x" { [\nparameters: { key: "a{" value: { string_value: "}" } }\nname: "m"\n'
+    stripped = tritonlib.strip_model_name(config)
+    assert 'name: "m"' not in stripped
+    assert stripped.startswith('# name: "x" { [')
+
+
+def test_server_lock_is_reentrant(tmp_path):
+    lock = str(tmp_path / ".lock")
+    with tritonlib.server_lock(path=lock):
+        with tritonlib.server_lock(path=lock, timeout_s=0.2):
+            pass
+
+
+def test_io_problem_caps_instances():
+    config = dict(GOOD_CONFIG, instance_group=[{"count": 20, "kind": "KIND_CPU"}])
+    assert "count" in tritonlib.io_problem(config)

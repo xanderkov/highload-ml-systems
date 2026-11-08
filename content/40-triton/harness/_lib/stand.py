@@ -166,13 +166,39 @@ def capacity(target: Target, cpus: set[int], *, connections: int = 8, seconds: f
         fail(str(exc))
 
 
+# Сколько ждать, пока сервер освободит другой замер. Меньше таймаута любого
+# харнесса раздела: иначе runner убьёт задание раньше, чем оно объяснит, чего ждало.
+LOCK_WAIT_S = 30
+
+
+@contextlib.contextmanager
+def exclusive():
+    """Сервер Triton (и его CPU) — только этому замеру, от подготовки до конца.
+
+    Сравнения с сервисом раздела 30 идут на тех же CPU, что и сервер, поэтому
+    блокировка держится весь замер, а не только пока загружена модель.
+    """
+    try:
+        with tritonlib.server_lock(timeout_s=LOCK_WAIT_S):
+            yield
+    except tritonlib.TritonBusy as exc:
+        fail(str(exc))
+
+
 @contextlib.contextmanager
 def triton_model(prefix: str, config: str, files: dict[str, bytes] | None = None):
-    """Модель на сервере Triton под блокировкой; ошибки сервера — понятным текстом и выходом."""
+    """Модель на сервере Triton под блокировкой; ошибки сервера — понятным текстом и выходом.
+
+    Конфиг сверяется так, как его понял сервер (tritonlib.io_problem): правка
+    в блоке замера получает то же объяснение, что и в задании.
+    """
     try:
         with tritonlib.server_lock():
             name = tritonlib.unique_name(prefix)
             with tritonlib.deploy(name, config, files if files is not None else tritonlib.python_model_files()) as url:
+                problem = tritonlib.io_problem(tritonlib.model_config(name))
+                if problem:
+                    fail(problem)
                 yield url, name
     except (tritonlib.TritonUnavailable, tritonlib.TritonLoadError, tritonlib.TritonBusy) as exc:
         fail(str(exc))

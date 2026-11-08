@@ -26,9 +26,12 @@ services:
     environment:
       CONTENT_ROOT: /content
     networks: [back]
+    # Не ждать готовности Triton: разделы без него должны работать, даже если
+    # сервер ещё грузится или упал (харнессы раздела «Triton» сами скажут,
+    # что он недоступен).
     depends_on:
       triton:
-        condition: service_healthy
+        condition: service_started
     tmpfs:
       - /work:size=512m,mode=1777
 
@@ -38,6 +41,9 @@ services:
   # runner'а прибит к CPU 0, вне этого набора.
   triton:
     build: ./triton
+    # Студент правит конфиги в блоках: упавший сервер (например, по памяти)
+    # поднимается сам, а не до ручного перезапуска.
+    restart: unless-stopped
     cpuset: "${TRITON_CPUS:-1-3}"
     mem_limit: 4g
     shm_size: 1g  # python backend передаёт тензоры через /dev/shm

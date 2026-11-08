@@ -106,6 +106,8 @@ def run_job(job: dict) -> dict:
             return {
                 "status": "timeout",
                 "message": f"Код не уложился в {timeout_s:.0f} с — похоже на бесконечный цикл",
+                # Что программа успела написать: харнесс мог объяснить, чего ждал.
+                "log": proc.stderr[-4000:],
             }
         if proc.returncode != 0:
             return {

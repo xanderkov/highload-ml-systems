@@ -23,17 +23,29 @@ SERVER_CPUS = 3
 
 
 def make_config(template: str, instances: int, threads: int, delay_ms: float) -> str:
-    config = re.sub(r"count:\s*\d+", f"count: {instances}", template)
-    config = re.sub(r'(key:\s*"TORCH_THREADS"\s*value:\s*\{\s*string_value:\s*")\d+', rf"\g<1>{threads}", config)
-    config = re.sub(r"\s*max_queue_delay_microseconds:\s*\d+", "", config)
-    return re.sub(r"dynamic_batching\s*\{", f"dynamic_batching {{\n  max_queue_delay_microseconds: {int(delay_ms * 1000)}",
+    config = re.sub(r"count\s*:\s*\d+", f"count: {instances}", template)
+    config = re.sub(r'(key\s*:\s*"TORCH_THREADS"\s*value\s*:?\s*\{\s*string_value\s*:\s*")\d+', rf"\g<1>{threads}", config)
+    config = re.sub(r"\s*max_queue_delay_microseconds\s*:\s*\d+", "", config)
+    return re.sub(r"dynamic_batching\s*:?\s*\{", f"dynamic_batching {{\n  max_queue_delay_microseconds: {int(delay_ms * 1000)}",
                   config, count=1)
+
+
+def check_config(name: str, instances: int, threads: int, delay_ms: float) -> None:
+    """Конфиг переписан регулярными выражениями — сверяем, что сервер понял его так, как задумано."""
+    got = stand.tritonlib.model_config(name)
+    count = sum(int(g.get("count", 1)) for g in got.get("instance_group", []))
+    delay = int(got.get("dynamic_batching", {}).get("max_queue_delay_microseconds", 0))
+    torch_threads = got.get("parameters", {}).get("TORCH_THREADS", {}).get("string_value")
+    if (count, delay, torch_threads) != (instances, int(delay_ms * 1000), str(threads)):
+        stand.fail(f"конфиг после подстановки не тот: экземпляров {count}, задержка {delay} мкс, "
+                   f"потоков {torch_threads}; ожидалось {instances}, {int(delay_ms * 1000)}, {threads}")
 
 
 def measure(template, inputs, load_cpus, instances, threads, delay_ms, rates):
     config = make_config(template, instances, threads, delay_ms)
     out = {}
     with stand.triton_model("instances", config) as (url, name):
+        check_config(name, instances, threads, delay_ms)
         target = stand.triton_target(url, name, inputs)
         stand.load(target, LOW_RPS, 0.5, load_cpus)  # прогрев
         for rps in rates:
@@ -74,4 +86,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    with stand.exclusive():
+        main()

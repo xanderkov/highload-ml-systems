@@ -91,3 +91,10 @@ def test_max_file_mb_from_meta_raises_limit():
     result = run_job(job(harness_dir="tests/fixtures/harness/bigfile_128", units={"a": ""}))
 
     assert result["status"] == "ok", result
+
+
+def test_timeout_result_carries_stderr_tail():
+    result = run_job(job(harness_dir="tests/fixtures/harness/hang_after_print", units={"a": ""}))
+
+    assert result["status"] == "timeout"
+    assert "занят другим замером" in result["log"]

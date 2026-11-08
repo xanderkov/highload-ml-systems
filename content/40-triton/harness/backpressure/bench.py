@@ -21,7 +21,7 @@ STEP_S = 3.0
 
 
 QUEUE_SIZE = 8
-_POLICY = re.compile(r"\s*default_queue_policy\s*\{[^{}]*\}")
+_POLICY = re.compile(r"\s*default_queue_policy\s*:?\s*\{[^{}]*\}")
 
 
 def unbounded(config: str) -> str:
@@ -31,7 +31,7 @@ def unbounded(config: str) -> str:
 
 def size_limited(config: str) -> str:
     """Тот же конфиг с политикой «не больше QUEUE_SIZE запросов в очереди»."""
-    return re.sub(r"dynamic_batching\s*\{", f"dynamic_batching {{\n  default_queue_policy {{ max_queue_size: {QUEUE_SIZE} }}",
+    return re.sub(r"dynamic_batching\s*:?\s*\{", f"dynamic_batching {{\n  default_queue_policy {{ max_queue_size: {QUEUE_SIZE} }}",
                   unbounded(config), count=1)
 
 
@@ -47,6 +47,12 @@ def main() -> None:
                 (f"max_queue_size {QUEUE_SIZE}", size_limited(block)))
     for label, config in variants:
         with stand.triton_model("queue", config) as (url, name):
+            # Конфиг переписан регулярным выражением — сверяем, что сервер понял его так, как задумано.
+            policy = stand.tritonlib.model_config(name).get("dynamic_batching", {}).get("default_queue_policy", {})
+            expected_size = QUEUE_SIZE if label.startswith("max_queue_size") else 0
+            if int(policy.get("max_queue_size", 0)) != expected_size or (label == "без границы" and policy.get("timeout_action") == "REJECT"):
+                stand.fail(f"«{label}»: не удалось переписать политику очереди в конфиге блока "
+                           f"(сервер видит {policy}); оставьте секцию dynamic_batching {{ default_queue_policy {{ … }} }}")
             target = stand.triton_target(url, name, inputs)
             stand.load(target, 50, 0.5, load_cpus)  # прогрев
             if steps is None:
@@ -67,4 +73,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    with stand.exclusive():
+        main()
