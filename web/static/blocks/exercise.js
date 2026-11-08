@@ -18,7 +18,7 @@ import { aceTheme } from "../theme.js";
 
 const RUN_LABEL = "Проверить";
 
-export function mount(element, { sectionId, blockId, params }) {
+export function mount(element, { sectionId, blockId, lang, params }) {
   const number = [...document.querySelectorAll('.block[data-kind="exercise"]')].indexOf(element) + 1;
   element.classList.add("exercise", "block-card");
   element.dataset.state = "idle";
@@ -40,7 +40,8 @@ export function mount(element, { sectionId, blockId, params }) {
 
   const starter = params.starter_code || "";
   const editor = ace.edit(element.querySelector(".editor"), {
-    mode: "ace/mode/python",
+    // pbtxt — config.pbtxt Triton: подсветка protobuf text format ближе всего.
+    mode: { python: "ace/mode/python", pbtxt: "ace/mode/protobuf" }[lang] || "ace/mode/text",
     theme: aceTheme(),
     value: starter,
     minLines: 12,

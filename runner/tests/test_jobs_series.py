@@ -64,3 +64,30 @@ def test_series_accepts_well_formed_payload():
 
     assert error is None
     assert payload["lines"][0]["points"][0]["y"] == 2.5
+
+
+def test_pbtxt_units_written_as_text_files():
+    # Задание на config.pbtxt: юнит — текстовый файл, харнесс — обычный Python.
+    config = 'backend: "python"\nmax_batch_size: 32'
+    result = run_job(job(lang="pbtxt", harness_dir="tests/fixtures/harness/pbtxt_echo", units={"a": config}))
+
+    assert result["status"] == "ok", result
+    assert result["lines"][0]["name"] == config
+
+
+def test_unknown_lang_still_rejected():
+    result = run_job(job(lang="c"))
+
+    assert result["status"] == "unsupported_lang"
+
+
+def test_file_size_limit_default_is_64_mib():
+    result = run_job(job(harness_dir="tests/fixtures/harness/bigfile_default", units={"a": ""}))
+
+    assert result["status"] == "runtime_error"
+
+
+def test_max_file_mb_from_meta_raises_limit():
+    result = run_job(job(harness_dir="tests/fixtures/harness/bigfile_128", units={"a": ""}))
+
+    assert result["status"] == "ok", result

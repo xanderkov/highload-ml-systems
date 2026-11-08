@@ -25,12 +25,12 @@ class ProcResult:
     timed_out: bool
 
 
-def _limits(memory_mb: int):
+def _limits(memory_mb: int, max_file_mb: int = MAX_FILE_MB):
     def apply() -> None:
         memory = memory_mb * 1024 * 1024
         resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
         resource.setrlimit(resource.RLIMIT_NPROC, (MAX_PROCESSES, MAX_PROCESSES))
-        file_size = MAX_FILE_MB * 1024 * 1024
+        file_size = max_file_mb * 1024 * 1024
         resource.setrlimit(resource.RLIMIT_FSIZE, (file_size, file_size))
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
@@ -43,6 +43,7 @@ def run(
     timeout_s: float,
     memory_mb: int,
     env: dict[str, str] | None = None,
+    max_file_mb: int = MAX_FILE_MB,
 ) -> ProcResult:
     # Своя сессия: процесс — лидер группы, и в конце задания убиваем всю группу,
     # чтобы форкнутые воркеры не пережили ни таймаут, ни падение родителя.
@@ -52,7 +53,7 @@ def run(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        preexec_fn=_limits(memory_mb),
+        preexec_fn=_limits(memory_mb, max_file_mb),
         env=env,
         start_new_session=True,
     )

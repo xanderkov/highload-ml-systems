@@ -9,7 +9,7 @@ from pathlib import Path
 import yaml
 
 from app.measure import ab_result, verdict
-from app.sandbox import run
+from app.sandbox import MAX_FILE_MB, run
 
 CONTENT_ROOT = Path(os.environ.get("CONTENT_ROOT", "/content"))
 WORK_ROOT = Path(os.environ.get("WORK_ROOT", "/work"))
@@ -22,7 +22,10 @@ MEMORY_MB = int(os.environ.get("BENCH_MEMORY_MB", "2048"))
 # "wrong but fast" case. Clamp instead of propagating it.
 MAX_SPEEDUP = 1_000_000.0
 
-SUPPORTED_LANGS = {"python"}
+# Язык блока задаёт расширение файла юнита; харнесс всегда Python.
+# pbtxt — config.pbtxt Triton: юнит — текст, его читает bench.py.
+UNIT_EXT = {"python": "py", "pbtxt": "pbtxt"}
+SUPPORTED_LANGS = set(UNIT_EXT)
 SUPPORTED_KINDS = {"ab", "series"}
 
 
@@ -34,7 +37,8 @@ def load_meta(harness_dir: str) -> tuple[Path, dict]:
     return path, meta
 
 
-def _prepare_python(work: Path, harness: Path, units: dict[str, str], meta: dict) -> tuple[list[str], dict]:
+def _prepare_python(work: Path, harness: Path, units: dict[str, str], meta: dict,
+                    lang: str = "python") -> tuple[list[str], dict]:
     """Готовит запуск Python-харнесса: студенческий и baseline-модули + bench.py.
 
     Возвращает команду и окружение процесса. Окружение явное и минимальное
@@ -44,7 +48,7 @@ def _prepare_python(work: Path, harness: Path, units: dict[str, str], meta: dict
     уроком про число потоков с нестабильными числами от прогона к прогону.
     """
     for name, source in units.items():
-        (work / f"unit_{name}.py").write_text(source, encoding="utf-8")
+        (work / f"unit_{name}.{UNIT_EXT[lang]}").write_text(source, encoding="utf-8")
     shutil.copy(harness / "bench.py", work / "bench.py")
     env = {
         "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
@@ -94,9 +98,10 @@ def run_job(job: dict) -> dict:
         # Синтаксическая ошибка в модуле студента всплывает при импорте как
         # ненулевой код выхода bench.py и обрабатывается ниже как
         # runtime_error — с сообщением SyntaxError, где уже есть номер строки.
-        command, env = _prepare_python(work, harness, job["units"], meta)
+        command, env = _prepare_python(work, harness, job["units"], meta, lang)
 
-        proc = run(command, work, timeout_s=timeout_s, memory_mb=min(MEMORY_MB, int(meta.get("memory_mb", MEMORY_MB))), env=env)
+        proc = run(command, work, timeout_s=timeout_s, memory_mb=min(MEMORY_MB, int(meta.get("memory_mb", MEMORY_MB))), env=env,
+                   max_file_mb=int(meta.get("max_file_mb", MAX_FILE_MB)))
         if proc.timed_out:
             return {
                 "status": "timeout",

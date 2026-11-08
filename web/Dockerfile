@@ -11,6 +11,7 @@ RUN mkdir -p /out/fonts \
 RUN mkdir -p /out/ace /out/uplot /out/katex \
  && cp node_modules/ace-builds/src-min-noconflict/ace.js \
        node_modules/ace-builds/src-min-noconflict/mode-python.js \
+       node_modules/ace-builds/src-min-noconflict/mode-protobuf.js \
        node_modules/ace-builds/src-min-noconflict/theme-github_dark.js \
        node_modules/ace-builds/src-min-noconflict/theme-github.js /out/ace/ \
  && cp node_modules/uplot/dist/uPlot.iife.min.js node_modules/uplot/dist/uPlot.min.css /out/uplot/ \

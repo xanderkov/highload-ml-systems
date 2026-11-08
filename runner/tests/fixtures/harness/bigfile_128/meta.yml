@@ -1,0 +1,4 @@
+kind: series
+lang: python
+timeout_s: 30
+max_file_mb: 128
