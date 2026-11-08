@@ -462,3 +462,42 @@ def test_engine_exception_is_shown():
     skip_if_not_enough_cores(result)
     assert result["status"] == "runtime_error", result
     assert "RuntimeError: oops" in result["log"], result
+
+
+# --- Раздел «LLM», задание 2: бюджет KV в llama.cpp -----------------------------
+
+def kv_values(slots, ctx_total):
+    return f"SLOTS = {slots}\nCTX_TOTAL = {ctx_total}\n"
+
+
+@pytest.mark.content
+def test_kv_budget_rejects_bad_values():
+    cases = {
+        kv_values(0, 2048): "SLOTS",
+        kv_values('"8"', 2048): "SLOTS",
+        kv_values(4, 2049): "CTX_TOTAL",
+        kv_values(9, 2048): "256",  # больше 8 слотов в бюджет не влезет: у слота минимум 256 токенов
+    }
+    for code, hint in cases.items():
+        result = execute_exercise("llm", "llm-kv-budget", code)
+        skip_if_not_enough_cores(result)
+        assert result["status"] == "runtime_error", (code, result)
+        assert hint in result["log"], (code, result)
+
+
+@pytest.mark.content
+def test_kv_budget_too_few_slots_fails_target():
+    result = execute_exercise("llm", "llm-kv-budget", kv_values(1, 2048))
+    skip_if_not_enough_cores(result)
+    assert result["status"] == "ok", result
+    assert result["correct"] is True and result["passed"] is False, result
+    assert "TTFT" in result["stderr"], result
+
+
+@pytest.mark.content
+def test_kv_budget_too_many_slots_truncates():
+    result = execute_exercise("llm", "llm-kv-budget", read_snippet("kv_starter.py", "50-llm"))
+    skip_if_not_enough_cores(result)
+    assert result["status"] == "ok", result
+    assert result["correct"] is False and result["passed"] is False, result
+    assert "обрезаны" in result["stderr"], result

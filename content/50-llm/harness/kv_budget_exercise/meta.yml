@@ -1,0 +1,10 @@
+kind: ab
+lang: python
+# auto: llama-server сам работает в трёх потоках на трёх CPU сервиса.
+threads: auto
+sizes: [1]
+warmup: 0
+repeats: 3
+timeout_s: 240
+memory_mb: 2048
+tolerance: 0
