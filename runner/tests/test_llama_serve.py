@@ -77,3 +77,29 @@ def test_queue_of_requests_under_sandbox_limits(tmp_path):
     script.write_text(_OVERLOAD.format(lib=lib))
     proc = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, timeout=120, cwd=tmp_path)
     assert "errors 0 None" in proc.stdout, proc.stdout + proc.stderr[-2000:]
+
+
+_HANG = """
+import sys, time
+sys.path.insert(0, {lib!r})
+import llama, stand
+
+if __name__ == "__main__":
+    _, service = stand.cpus()
+    with llama.serve(slots=2, ctx_total=512, cpus=service):
+        print("up", flush=True)
+        time.sleep(600)
+"""
+
+
+def test_runner_timeout_does_not_leave_llama_running(tmp_path):
+    # Таймаут задания: runner убивает группу процессов харнесса (SIGKILL),
+    # finally в serve() не выполняется — сервер не должен пережить харнесс.
+    from app.sandbox import run
+    lib = os.path.join(_root, "50-llm", "harness", "_lib")
+    (tmp_path / "hang.py").write_text(_HANG.format(lib=lib))
+    result = run([sys.executable, "hang.py"], tmp_path, timeout_s=8, memory_mb=2048)
+    assert result.timed_out and "up" in result.stdout, result
+    import time
+    time.sleep(1)
+    assert no_llama_left()

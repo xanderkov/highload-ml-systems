@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import os
 import signal
 import socket
@@ -24,6 +25,15 @@ HEALTH_TIMEOUT_S = 30
 # -np 32 -c 32768 стартует, -c 65536 — нет (спека §7.2).
 KV_BUDGET = 32768
 STDERR_LINES = 40
+
+
+_PR_SET_PDEATHSIG = 1
+
+
+def _child_setup(cpus: set[int]) -> None:
+    """В дочернем процессе до exec: CPU сервиса и смерть вместе с харнессом."""
+    os.sched_setaffinity(0, cpus)
+    ctypes.CDLL(None, use_errno=True).prctl(_PR_SET_PDEATHSIG, signal.SIGKILL)
 
 
 def http_threads(slots: int) -> int:
@@ -72,8 +82,10 @@ def serve(*, slots: int, ctx_total: int, cpus: set[int], extra: list[str] | None
         # MALLOC_ARENA_MAX: каждая арена malloc резервирует 64 МиБ адресов, и под RLIMIT_AS
         # задания потоки HTTP при очереди запросов переставали создаваться (спека §7.3).
         env = {**os.environ, "LD_LIBRARY_PATH": LIB_DIR, "MALLOC_ARENA_MAX": "2"}
-        proc = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=log, start_new_session=True, env=env,
-                                preexec_fn=lambda: os.sched_setaffinity(0, cpus))
+        # Сервер остаётся в группе процессов харнесса: по таймауту runner убивает
+        # группу целиком. PDEATHSIG — на случай, если харнесс убьют отдельно.
+        proc = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=log, env=env,
+                                preexec_fn=lambda: _child_setup(cpus))
     try:
         deadline = time.monotonic() + HEALTH_TIMEOUT_S
         while not _healthy(url):
@@ -87,10 +99,10 @@ def serve(*, slots: int, ctx_total: int, cpus: set[int], extra: list[str] | None
         yield url
     finally:
         if proc.poll() is None:
-            os.killpg(proc.pid, signal.SIGTERM)
+            proc.terminate()
             try:
                 proc.wait(5)
             except subprocess.TimeoutExpired:
-                os.killpg(proc.pid, signal.SIGKILL)
+                proc.kill()
                 proc.wait()
         os.unlink(log_path)

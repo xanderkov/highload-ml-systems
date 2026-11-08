@@ -47,5 +47,25 @@ def exclusive(path: str = LOCK_PATH, wait_s: float = LOCK_WAIT_S):
                     time.sleep(0.2)
         try:
             yield
+        except Exception as exc:  # noqa: BLE001
+            message = _known_failure(exc)
+            if message is None:
+                raise
+            fail(message)
         finally:
             fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def _known_failure(exc: Exception) -> str | None:
+    """Сбои стенда, а не кода студента: понятное сообщение вместо трассировки."""
+    import llama
+    import llmload
+    if isinstance(exc, llmload.LoadGeneratorLagging):
+        return (f"{exc}. Замер нечестный: генератор нагрузки не успевал отправлять запросы по расписанию. "
+                "Похоже, машина занята чем-то ещё — закройте тяжёлые программы и запустите блок снова.")
+    if isinstance(exc, TimeoutError):
+        return ("Сервер не ответил на все запросы: не дождались окончания генерации за отведённое время. "
+                "Похоже, нагрузка намного выше того, что сервер успевает, — уменьшите её.")
+    if isinstance(exc, llama.LlamaStartError):
+        return str(exc)
+    return None
