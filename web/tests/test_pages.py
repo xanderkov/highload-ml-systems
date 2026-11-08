@@ -232,11 +232,13 @@ def test_home_cards_show_summary_and_progress(mixed):
 
 def test_home_has_soon_cards(mixed):
     home = mixed.get("/").text
-    for title in ("Triton Inference Server", "LLM-сервинг"):
-        assert title in home
-        before = home[: home.index(title)]
-        # Карточка «скоро» — не ссылка: последний открытый <a> перед ней закрыт.
-        assert before.rfind("<a ") < before.rfind("</a>")
+    # Раздел про Triton уже написан: «скоро» осталось только LLM.
+    assert "скоро" in home and home.count("скоро") == 1
+    title = "LLM-сервинг"
+    assert title in home
+    before = home[: home.index(title)]
+    # Карточка «скоро» — не ссылка: последний открытый <a> перед ней закрыт.
+    assert before.rfind("<a ") < before.rfind("</a>")
 
 
 def test_page_toc_lists_subheadings(mixed, tmp_path):
