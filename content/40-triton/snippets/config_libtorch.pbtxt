@@ -1,0 +1,14 @@
+# libtorch: модель — TorchScript-файл 1/model.pt, Python в сервере не участвует.
+platform: "pytorch_libtorch"
+max_batch_size: 32
+input [
+  { name: "INPUT__0" data_type: TYPE_FP32 dims: [ 3, 64, 64 ] }
+]
+output [
+  { name: "OUTPUT__0" data_type: TYPE_FP32 dims: [ 10 ] }
+]
+instance_group [ { count: 1 kind: KIND_CPU } ]
+# Потоки внутри операций torch на экземпляр — параметр backend.
+parameters: { key: "INTRA_OP_THREAD_COUNT" value: { string_value: "3" } }
+dynamic_batching {
+}

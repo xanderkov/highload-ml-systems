@@ -1,0 +1,11 @@
+kind: ab
+lang: python
+threads: auto
+sizes: [1]
+warmup: 0
+repeats: 3
+timeout_s: 150
+memory_mb: 2048
+tolerance: 0
+# model.pt widemodel — около 118 МБ, больше лимита файла по умолчанию.
+max_file_mb: 256

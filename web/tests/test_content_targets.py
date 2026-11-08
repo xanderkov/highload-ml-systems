@@ -369,3 +369,58 @@ def test_config_exercise_wrong_io_names():
     result = execute_exercise("triton", "config-exercise", code)
     assert result["status"] == "runtime_error", result
     assert "INPUT__0" in result["log"], result
+
+
+# --- Раздел 40, задание «экспорт в libtorch» -------------------------------
+
+def export_solution(**replace):
+    text = read_snippet("export_ref.py", "40-triton")
+    for old, new in replace.items():
+        assert old in text, old
+        text = text.replace(old, new)
+    return text
+
+
+# Типичная ошибка: модель «зашита» на батч 1 (reshape с константой при трассировке).
+EXPORT_FIXED_BATCH = '''
+import torch
+
+
+class _FixedBatch(torch.nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+
+    def forward(self, x):
+        return self.model(x.reshape(1, 3, 64, 64))
+
+
+def export(model, path):
+    torch.jit.trace(_FixedBatch(model.eval()), torch.zeros(1, 3, 64, 64)).save(path)
+'''
+
+
+@pytest.mark.content
+def test_export_fixed_batch_is_reported():
+    ref = read_snippet("export_ref.py", "40-triton")
+    code = ref[:ref.index("def export")] + EXPORT_FIXED_BATCH
+    result = execute_exercise("triton", "export-exercise", code)
+    assert result["status"] == "runtime_error", result
+    assert "батч" in result["log"] and "1" in result["log"], result
+
+
+@pytest.mark.content
+def test_export_wrong_io_names_are_reported():
+    code = export_solution(**{'name: "INPUT__0"': 'name: "x"'})
+    result = execute_exercise("triton", "export-exercise", code)
+    assert result["status"] == "runtime_error", result
+    assert "INPUT__0" in result["log"], result
+
+
+@pytest.mark.content
+def test_export_exception_shows_traceback():
+    signature = "def export(model: torch.nn.Module, path: str) -> None:\n"
+    code = export_solution(**{signature: signature + "    raise ValueError('сломано')\n"})
+    result = execute_exercise("triton", "export-exercise", code)
+    assert result["status"] == "runtime_error", result
+    assert "сломано" in result["log"], result

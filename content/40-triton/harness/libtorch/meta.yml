@@ -1,0 +1,7 @@
+kind: series
+lang: pbtxt
+threads: auto
+timeout_s: 180
+memory_mb: 2048
+# model.pt widemodel — около 118 МБ, больше лимита файла по умолчанию.
+max_file_mb: 256

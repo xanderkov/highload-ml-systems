@@ -24,6 +24,18 @@ import widemodel
 
 HERE = Path(__file__).resolve().parent
 INPUTS = 64
+# Python backend с dynamic batching — эталон задания главы 2 (snippets/config_ref.pbtxt).
+# Точка сравнения в главах 4–5; _lib копируется в задание только *.py, поэтому
+# конфиг здесь строкой.
+PYTHON_CONFIG = """
+backend: "python"
+max_batch_size: 32
+input [ { name: "INPUT__0" data_type: TYPE_FP32 dims: [ 3, 64, 64 ] } ]
+output [ { name: "OUTPUT__0" data_type: TYPE_FP32 dims: [ 10 ] } ]
+instance_group [ { count: 1 kind: KIND_CPU } ]
+parameters: { key: "TORCH_THREADS" value: { string_value: "3" } }
+dynamic_batching { }
+"""
 OCTET = "application/octet-stream"
 
 

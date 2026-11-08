@@ -69,6 +69,10 @@ class TritonLoadError(RuntimeError):
     """Triton не загрузил модель; текст — сообщение сервера."""
 
 
+class TritonInferError(RuntimeError):
+    """Сервер ответил на запрос ошибкой; текст — сообщение сервера."""
+
+
 def _call(method: str, path: str, body: bytes | None = None, *, base: str | None = None,
           timeout_s: float = 120) -> tuple[int, bytes]:
     url = (base or TRITON_URL) + path
@@ -202,6 +206,20 @@ def io_problem(config: dict) -> str | None:
             return (f"{kind}: ожидается один тензор {name} {dtype} [{', '.join(dims)}] "
                     f"(так его называет model.py и шлёт стенд), а в конфиге: {shown}")
     return None
+
+
+def infer(name: str, array: np.ndarray) -> np.ndarray:
+    """Один запрос к модели (батч — первое измерение array); выход как массив."""
+    body, headers = v2_body(array)
+    request = urllib.request.Request(f"{TRITON_URL}/v2/models/{name}/infer", data=body, method="POST",
+                                     headers={**headers, "Content-Type": content_type()})
+    try:
+        with _NO_PROXY.open(request, timeout=60) as response:
+            return parse_v2_response(response.read())
+    except urllib.error.HTTPError as exc:
+        raise TritonInferError(_error_text(exc.read())) from None
+    except OSError as exc:
+        raise TritonUnavailable(f"сервер Triton недоступен ({TRITON_URL}): {exc}") from None
 
 
 def python_model_files() -> dict[str, bytes]:

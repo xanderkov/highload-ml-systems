@@ -132,3 +132,20 @@ def test_bad_input_fails_only_its_request():
         delta = tritonlib.metrics_delta(before, tritonlib.parse_metrics(tritonlib.read_metrics(), name))
     assert [results[k][0] for k in range(4)] == [200, 400, 200, 200], results
     assert delta["exec_count"] < 4  # запросы действительно собрались в батч
+
+
+def test_infer_returns_output_for_batch(x):
+    name = tritonlib.unique_name("t")
+    with tritonlib.server_lock(), tritonlib.deploy(name, CONFIG, tritonlib.python_model_files()):
+        out = tritonlib.infer(name, x)
+    assert out.shape == (3, 10)
+    assert np.allclose(out, expected(x), rtol=1e-4, atol=1e-4)
+
+
+def test_infer_error_carries_server_message():
+    name = tritonlib.unique_name("t")
+    bad = np.zeros((1, 3, 64, 64), dtype=np.float32)
+    bad.flat[0] = tritonlib.BAD_INPUT
+    with tritonlib.server_lock(), tritonlib.deploy(name, CONFIG, tritonlib.python_model_files()):
+        with pytest.raises(tritonlib.TritonInferError, match="битый вход"):
+            tritonlib.infer(name, bad)
